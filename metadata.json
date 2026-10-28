@@ -1,0 +1,7 @@
+{
+  "uuid": "buds-quick-toggle@local",
+  "name": "Galaxy Buds3 Pro Quick Settings Toggle",
+  "description": "One-click Ubuntu / Android switcher and manager shortcut for Samsung Galaxy Buds3 Pro in GNOME Quick Settings.",
+  "shell-version": ["45", "46", "47", "48"],
+  "version": 1
+}

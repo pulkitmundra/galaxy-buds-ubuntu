@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Galaxy Buds Manager
+Comment=Manage Galaxy Buds3 Pro (ANC, Battery, Equalizer)
+Exec=__HOME__/.local/opt/galaxybudsclient/GalaxyBudsClient
+Terminal=false
+Type=Application
+Icon=__HOME__/.local/share/icons/earbuds-symbolic.svg
+Categories=AudioVideo;Audio;Settings;

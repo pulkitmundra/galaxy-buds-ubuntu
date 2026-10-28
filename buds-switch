@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  # shellcheck disable=SC1091
+  source "$SCRIPT_DIR/.env"
+elif [ -f "$HOME/.config/buds-switch.env" ]; then
+  # shellcheck disable=SC1091
+  source "$HOME/.config/buds-switch.env"
+fi
+
+ICON="$HOME/.local/share/icons/earbuds-symbolic.svg"
+
+if [ -z "${BUD_MAC:-}" ] || [ "${BUD_MAC^^}" = "AA:BB:CC:DD:EE:FF" ]; then
+  msg="BUD_MAC is not configured. Edit $SCRIPT_DIR/.env and set your Galaxy Buds MAC address."
+  notify-send -i "$ICON" "Galaxy Buds3 Pro" "$msg" 2>/dev/null || true
+  echo "Error: $msg" >&2
+  exit 1
+fi
+
+BUD_MAC="${BUD_MAC^^}"
+MAC_UNDERSCORE="${BUD_MAC//:/_}"
+DETECTED_PATH=$(gdbus call --system --dest org.bluez --object-path / --method org.freedesktop.DBus.ObjectManager.GetManagedObjects 2>/dev/null | grep -oE "/org/bluez/hci[0-9]+/dev_${MAC_UNDERSCORE}" | head -n 1 || true)
+BUD_PATH="${DETECTED_PATH:-/org/bluez/hci0/dev_${MAC_UNDERSCORE}}"
+MACRODROID_WEBHOOK_BASE="${MACRODROID_WEBHOOK_BASE:-}"
+
+is_connected() {
+  bluetoothctl info "$BUD_MAC" 2>/dev/null | grep -q "Connected: yes"
+}
+
+set_default_sink() {
+  sleep 1
+  local sink_id
+  sink_id=$(wpctl status -n 2>/dev/null | awk '/Sinks:/,/Sources:/' | grep -i "bluez_output\.${MAC_UNDERSCORE}" | grep -oE '[0-9]+\.' | head -n 1 | tr -d '.')
+  if [ -z "$sink_id" ]; then
+    sink_id=$(wpctl status 2>/dev/null | awk '/Sinks:/,/Sources:/' | grep -i "Galaxy Buds" | grep -oE '[0-9]+\.' | head -n 1 | tr -d '.')
+  fi
+  if [ -n "$sink_id" ]; then
+    wpctl set-default "$sink_id" 2>/dev/null || true
+  fi
+}
+
+connect_bredr_profiles() {
+  gdbus call --system --dest org.bluez --object-path "$BUD_PATH" \
+    --method org.bluez.Device1.ConnectProfile "0000110b-0000-1000-8000-00805f9b34fb" >/dev/null 2>&1 || return 1
+  gdbus call --system --dest org.bluez --object-path "$BUD_PATH" \
+    --method org.bluez.Device1.ConnectProfile "0000110e-0000-1000-8000-00805f9b34fb" >/dev/null 2>&1 || true
+  gdbus call --system --dest org.bluez --object-path "$BUD_PATH" \
+    --method org.bluez.Device1.ConnectProfile "0000111e-0000-1000-8000-00805f9b34fb" >/dev/null 2>&1 || true
+  return 0
+}
+
+connect_buds() {
+  if is_connected; then
+    set_default_sink
+    exit 0
+  fi
+  notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "Galaxy Buds3 Pro" "Pulling earbuds from phone to Ubuntu..." 2>/dev/null || true
+  bluetoothctl power on >/dev/null 2>&1 || true
+
+  connect_bredr_profiles || {
+    sleep 1
+    connect_bredr_profiles || bluetoothctl connect "$BUD_MAC" >/dev/null 2>&1 || true
+  }
+
+  if is_connected; then
+    set_default_sink
+    notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "Galaxy Buds3 Pro" "Connected to Ubuntu" 2>/dev/null || true
+    exit 0
+  else
+    notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "Galaxy Buds3 Pro" "Could not connect. Make sure earbuds are out of the case." 2>/dev/null || true
+    exit 1
+  fi
+}
+
+disconnect_buds() {
+  bluetoothctl disconnect "$BUD_MAC" >/dev/null 2>&1 || true
+  notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "Galaxy Buds3 Pro" "Switching earbuds to Android..." 2>/dev/null || true
+  if [ -n "$MACRODROID_WEBHOOK_BASE" ]; then
+    (
+      sleep 0.5
+      curl -sS --max-time 5 "${MACRODROID_WEBHOOK_BASE}/buds" >/dev/null 2>&1 || true
+    ) &
+  fi
+}
+
+case "${1:-toggle}" in
+  connect)
+    connect_buds
+    ;;
+  disconnect)
+    disconnect_buds
+    ;;
+  status)
+    if is_connected; then
+      echo "connected"
+    else
+      echo "disconnected"
+    fi
+    ;;
+  toggle|*)
+    if is_connected; then
+      disconnect_buds
+    else
+      connect_buds
+    fi
+    ;;
+esac
