@@ -122,6 +122,18 @@ buds-switch status       # Prints "connected" or "disconnected"
 
 You can also bind `buds-switch toggle` to a custom keyboard shortcut in **Ubuntu Settings -> Keyboard -> Custom Shortcuts**.
 
+---
+
+## Contributing & Contact
+
+Issues, feature requests, and pull requests are welcome!
+
+- **Author**: **Pulkit Mundra**
+- **Portfolio**: [pulkit-mundra-portfolio.vercel.app](https://pulkit-mundra-portfolio.vercel.app)
+- **GitHub**: [@pulkitmundra](https://github.com/pulkitmundra)
+- **LinkedIn**: [linkedin.com/in/pulkit-mundra](https://www.linkedin.com/in/pulkit-mundra/)
+- **Email**: [pmundra8@gmail.com](mailto:pmundra8@gmail.com)
+
 ## License
 
 MIT License
