@@ -1,12 +1,29 @@
 #!/usr/bin/env bash
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+ENV_FILE=""
 if [ -f "$SCRIPT_DIR/.env" ]; then
-  # shellcheck disable=SC1091
-  source "$SCRIPT_DIR/.env"
+  ENV_FILE="$SCRIPT_DIR/.env"
 elif [ -f "$HOME/.config/buds-switch.env" ]; then
-  # shellcheck disable=SC1091
-  source "$HOME/.config/buds-switch.env"
+  ENV_FILE="$HOME/.config/buds-switch.env"
+fi
+
+read_env_var() {
+  local key="$1"
+  local file="$2"
+  if [ -z "$file" ] || [ ! -f "$file" ]; then
+    return 0
+  fi
+  grep -E "^[[:space:]]*${key}[[:space:]]*=" "$file" | tail -n 1 | sed -E "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*//; s/[[:space:]]*#.*$//; s/^[\"']//; s/[\"']$//"
+}
+
+if [ -n "$ENV_FILE" ]; then
+  if [ -z "${BUD_MAC:-}" ]; then
+    BUD_MAC="$(read_env_var "BUD_MAC" "$ENV_FILE")"
+  fi
+  if [ -z "${MACRODROID_WEBHOOK_BASE:-}" ]; then
+    MACRODROID_WEBHOOK_BASE="$(read_env_var "MACRODROID_WEBHOOK_BASE" "$ENV_FILE")"
+  fi
 fi
 
 ICON="$HOME/.local/share/icons/earbuds-symbolic.svg"
@@ -19,10 +36,21 @@ if [ -z "${BUD_MAC:-}" ] || [ "${BUD_MAC^^}" = "AA:BB:CC:DD:EE:FF" ]; then
 fi
 
 BUD_MAC="${BUD_MAC^^}"
+if ! [[ "$BUD_MAC" =~ ^([0-9A-F]{2}:){5}[0-9A-F]{2}$ ]]; then
+  msg="Invalid BUD_MAC format in .env (expected XX:XX:XX:XX:XX:XX)."
+  notify-send -i "$ICON" "Galaxy Buds3 Pro" "$msg" 2>/dev/null || true
+  echo "Error: $msg" >&2
+  exit 1
+fi
+
 MAC_UNDERSCORE="${BUD_MAC//:/_}"
 DETECTED_PATH=$(gdbus call --system --dest org.bluez --object-path / --method org.freedesktop.DBus.ObjectManager.GetManagedObjects 2>/dev/null | grep -oE "/org/bluez/hci[0-9]+/dev_${MAC_UNDERSCORE}" | head -n 1 || true)
 BUD_PATH="${DETECTED_PATH:-/org/bluez/hci0/dev_${MAC_UNDERSCORE}}"
 MACRODROID_WEBHOOK_BASE="${MACRODROID_WEBHOOK_BASE:-}"
+if [ -n "$MACRODROID_WEBHOOK_BASE" ] && ! [[ "$MACRODROID_WEBHOOK_BASE" =~ ^https?://[A-Za-z0-9._:/-]+$ ]]; then
+  echo "Warning: Ignoring invalid MACRODROID_WEBHOOK_BASE URL format." >&2
+  MACRODROID_WEBHOOK_BASE=""
+fi
 
 is_connected() {
   bluetoothctl info "$BUD_MAC" 2>/dev/null | grep -q "Connected: yes"
@@ -79,7 +107,7 @@ disconnect_buds() {
   if [ -n "$MACRODROID_WEBHOOK_BASE" ]; then
     (
       sleep 0.5
-      curl -sS --max-time 5 "${MACRODROID_WEBHOOK_BASE}/buds" >/dev/null 2>&1 || true
+      curl -sS --proto '=https,http' --max-time 5 -- "${MACRODROID_WEBHOOK_BASE%/}/buds" >/dev/null 2>&1 || true
     ) &
   fi
 }
