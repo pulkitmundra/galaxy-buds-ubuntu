@@ -20,46 +20,37 @@ const HFP_UUID = '0000111e-0000-1000-8000-00805f9b34fb';
 function resolveExtensionIcon() {
     try {
         const bundledUrl = new URL('./earbuds-symbolic.svg', import.meta.url);
-        const bundledFile = Gio.File.new_for_uri(bundledUrl.href);
-        if (bundledFile.query_exists(null)) {
-            return new Gio.FileIcon({ file: bundledFile });
-        }
+        return new Gio.FileIcon({ file: Gio.File.new_for_uri(bundledUrl.href) });
     } catch (_e) {
-        // Fallback below
+        return Gio.icon_new_for_string('audio-headphones-symbolic');
     }
-    const localPath = `${HOME_DIR}/.local/share/icons/earbuds-symbolic.svg`;
-    if (GLib.file_test(localPath, GLib.FileTest.EXISTS)) {
-        return Gio.icon_new_for_string(localPath);
-    }
-    return Gio.icon_new_for_string('audio-headphones-symbolic');
 }
 
-function readEnvFile() {
+function readEnvFileAsync(callback) {
     const cfg = { macUnderscore: null, webhookBase: '' };
-    try {
-        const envPath = `${HOME_DIR}/.config/buds-switch.env`;
-        if (!GLib.file_test(envPath, GLib.FileTest.EXISTS)) {
-            return cfg;
-        }
-        const [ok, bytes] = GLib.file_get_contents(envPath);
-        if (ok) {
-            const text = new TextDecoder().decode(bytes);
-            const macMatch = text.match(/^\s*BUD_MAC\s*=\s*["']?([0-9A-Fa-f:]{17})["']?/m);
-            if (macMatch && macMatch[1]) {
-                const upper = macMatch[1].toUpperCase();
-                if (upper !== 'AA:BB:CC:DD:EE:FF') {
-                    cfg.macUnderscore = upper.replace(/:/g, '_');
+    const envFile = Gio.File.new_for_path(`${HOME_DIR}/.config/buds-switch.env`);
+    envFile.load_contents_async(null, (file, res) => {
+        try {
+            const [ok, bytes] = file.load_contents_finish(res);
+            if (ok && bytes) {
+                const text = new TextDecoder().decode(bytes);
+                const macMatch = text.match(/^\s*BUD_MAC\s*=\s*["']?([0-9A-Fa-f:]{17})["']?/m);
+                if (macMatch && macMatch[1]) {
+                    const upper = macMatch[1].toUpperCase();
+                    if (upper !== 'AA:BB:CC:DD:EE:FF') {
+                        cfg.macUnderscore = upper.replace(/:/g, '_');
+                    }
+                }
+                const hookMatch = text.match(/^\s*MACRODROID_WEBHOOK_BASE\s*=\s*["']?([^"'\s#]*)["']?/m);
+                if (hookMatch && hookMatch[1]) {
+                    cfg.webhookBase = hookMatch[1].trim().replace(/\/+$/, '').replace(/\/buds$/i, '');
                 }
             }
-            const hookMatch = text.match(/^\s*MACRODROID_WEBHOOK_BASE\s*=\s*["']?([^"'\s#]*)["']?/m);
-            if (hookMatch && hookMatch[1]) {
-                cfg.webhookBase = hookMatch[1].trim().replace(/\/+$/, '').replace(/\/buds$/i, '');
-            }
+        } catch (_e) {
+            // Ignore if ~/.config/buds-switch.env does not exist yet
         }
-    } catch (_e) {
-        // Ignore read error
-    }
-    return cfg;
+        callback(cfg);
+    });
 }
 
 function parseBlueZManagedObjects(objects, configuredMacU) {
@@ -130,39 +121,40 @@ function parseBlueZManagedObjects(objects, configuredMacU) {
 }
 
 function discoverBudsAsync(callback) {
-    const { macUnderscore, webhookBase } = readEnvFile();
-    Gio.DBus.system.call(
-        'org.bluez',
-        '/',
-        'org.freedesktop.DBus.ObjectManager',
-        'GetManagedObjects',
-        null,
-        new GLib.VariantType('(a{oa{sa{sv}}})'),
-        Gio.DBusCallFlags.NONE,
-        2000,
-        null,
-        (conn, res) => {
-            try {
-                const reply = conn.call_finish(res);
-                const [objects] = reply.deep_unpack();
-                const info = parseBlueZManagedObjects(objects, macUnderscore);
-                info.webhookBase = webhookBase;
-                callback(info);
-            } catch (_e) {
-                const macU = macUnderscore || '00_00_00_00_00_00';
-                callback({
-                    objectPath: `/org/bluez/hci0/dev_${macU}`,
-                    adapterPath: '/org/bluez/hci0',
-                    macUnderscore: macU,
-                    alias: 'Samsung Galaxy Buds',
-                    connected: false,
-                    paired: false,
-                    battery: null,
-                    webhookBase,
-                });
+    readEnvFileAsync(({ macUnderscore, webhookBase }) => {
+        Gio.DBus.system.call(
+            'org.bluez',
+            '/',
+            'org.freedesktop.DBus.ObjectManager',
+            'GetManagedObjects',
+            null,
+            new GLib.VariantType('(a{oa{sa{sv}}})'),
+            Gio.DBusCallFlags.NONE,
+            2000,
+            null,
+            (conn, res) => {
+                try {
+                    const reply = conn.call_finish(res);
+                    const [objects] = reply.deep_unpack();
+                    const info = parseBlueZManagedObjects(objects, macUnderscore);
+                    info.webhookBase = webhookBase;
+                    callback(info);
+                } catch (_e) {
+                    const macU = macUnderscore || '00_00_00_00_00_00';
+                    callback({
+                        objectPath: `/org/bluez/hci0/dev_${macU}`,
+                        adapterPath: '/org/bluez/hci0',
+                        macUnderscore: macU,
+                        alias: 'Samsung Galaxy Buds',
+                        connected: false,
+                        paired: false,
+                        battery: null,
+                        webhookBase,
+                    });
+                }
             }
-        }
-    );
+        );
+    });
 }
 
 function formatModelTitles(rawAlias) {
