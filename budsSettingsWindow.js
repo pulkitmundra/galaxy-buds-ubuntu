@@ -203,40 +203,46 @@ export function scanPairedGalaxyBuds() {
     return results.length > 0 ? results : fallbackHeadsets;
 }
 
-function getActivePipeWireProfile(macUnderscore) {
-    if (!macUnderscore) return 'Unconfigured';
-    try {
-        const proc = Gio.Subprocess.new(
-            ['pw-dump'],
-            Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE
-        );
-        const [ok, stdoutBytes] = proc.communicate_utf8(null, null);
-        if (!ok || !stdoutBytes) return 'Inactive (Disconnected)';
-        const data = JSON.parse(stdoutBytes);
-        for (const obj of data) {
-            if (obj.type !== 'PipeWire:Interface:Device') continue;
-            const props = obj.info?.props || {};
-            const devName = String(props['device.name'] || '');
-            if (devName.toUpperCase().includes(macUnderscore.toUpperCase())) {
-                const activeProfiles = obj.info?.params?.Profile || [];
-                if (activeProfiles.length > 0) {
-                    const prof = activeProfiles[0];
-                    const pName = String(prof.name || '');
-                    const pDesc = String(prof.description || pName);
-                    if (pName.startsWith('a2dp-sink')) {
-                        return `High-Fidelity Music (A2DP - ${pDesc})`;
+function updateActivePipeWireProfileAsync(macUnderscore, targetRow) {
+    if (!macUnderscore) {
+        targetRow.set_subtitle('Unconfigured');
+        return;
+    }
+    runSubprocessAsync(['pw-dump'], (ok, stdout) => {
+        if (!ok || !stdout) {
+            targetRow.set_subtitle('Inactive (Disconnected)');
+            return;
+        }
+        try {
+            const data = JSON.parse(stdout);
+            for (const obj of data) {
+                if (obj.type !== 'PipeWire:Interface:Device') continue;
+                const props = obj.info?.props || {};
+                const devName = String(props['device.name'] || '');
+                if (devName.toUpperCase().includes(macUnderscore.toUpperCase())) {
+                    const activeProfiles = obj.info?.params?.Profile || [];
+                    if (activeProfiles.length > 0) {
+                        const prof = activeProfiles[0];
+                        const pName = String(prof.name || '');
+                        const pDesc = String(prof.description || pName);
+                        if (pName.startsWith('a2dp-sink')) {
+                            targetRow.set_subtitle(`High-Fidelity Music (A2DP - ${pDesc})`);
+                            return;
+                        }
+                        if (pName.startsWith('headset-head-unit')) {
+                            targetRow.set_subtitle(`Call + Microphone (HFP/HSP - ${pDesc})`);
+                            return;
+                        }
+                        targetRow.set_subtitle(pDesc);
+                        return;
                     }
-                    if (pName.startsWith('headset-head-unit')) {
-                        return `Call + Microphone (HFP/HSP - ${pDesc})`;
-                    }
-                    return pDesc;
                 }
             }
+        } catch (_e) {
+            // Ignore parse error
         }
-    } catch (_e) {
-        // Fallback below
-    }
-    return 'Inactive (Disconnected)';
+        targetRow.set_subtitle('Inactive (Disconnected)');
+    });
 }
 
 function maskWebhookUrl(url) {
@@ -643,7 +649,7 @@ export function populatePreferencesWindow(window) {
             diagStateRow.set_subtitle('Unconfigured');
         }
 
-        diagProfileRow.set_subtitle(getActivePipeWireProfile(macUnderscore));
+        updateActivePipeWireProfileAsync(macUnderscore, diagProfileRow);
         diagWebhookRow.set_subtitle(maskWebhookUrl(webhookEntry.get_text().trim() || currentCfg.webhookBase));
         const hasManager = GLib.file_test(MANAGER_BIN, GLib.FileTest.IS_EXECUTABLE);
         diagManagerRow.set_subtitle(
@@ -727,7 +733,12 @@ export function populatePreferencesWindow(window) {
 
     connectNowBtn.connect('clicked', () => {
         connectNowBtn.set_sensitive(false);
-        runSubprocessAsync([SWITCH_SCRIPT, 'connect'], () => {
+        const hasSwitch = GLib.file_test(SWITCH_SCRIPT, GLib.FileTest.IS_EXECUTABLE);
+        const targetMac = (macEntry.get_text() || '').trim().toUpperCase();
+        const argv = hasSwitch
+            ? [SWITCH_SCRIPT, 'connect']
+            : ['bluetoothctl', 'connect', targetMac];
+        runSubprocessAsync(argv, () => {
             connectNowBtn.set_sensitive(true);
             refreshDiagnostics();
         });
@@ -735,7 +746,12 @@ export function populatePreferencesWindow(window) {
 
     disconnectNowBtn.connect('clicked', () => {
         disconnectNowBtn.set_sensitive(false);
-        runSubprocessAsync([SWITCH_SCRIPT, 'disconnect'], () => {
+        const hasSwitch = GLib.file_test(SWITCH_SCRIPT, GLib.FileTest.IS_EXECUTABLE);
+        const targetMac = (macEntry.get_text() || '').trim().toUpperCase();
+        const argv = hasSwitch
+            ? [SWITCH_SCRIPT, 'disconnect']
+            : ['bluetoothctl', 'disconnect', targetMac];
+        runSubprocessAsync(argv, () => {
             disconnectNowBtn.set_sensitive(true);
             refreshDiagnostics();
         });
@@ -769,19 +785,3 @@ export function populatePreferencesWindow(window) {
     refreshDiagnostics();
 }
 
-// Standalone launcher mode when executed via `buds-settings`
-if (typeof ARGV !== 'undefined' && ARGV.includes('--standalone')) {
-    Adw.init();
-    const app = new Adw.Application({
-        application_id: 'io.github.pulkitmundra.GalaxyBudsSwitcher.Settings',
-        flags: Gio.ApplicationFlags.NON_UNIQUE,
-    });
-    app.connect('activate', application => {
-        const win = new Adw.PreferencesWindow({
-            application,
-        });
-        populatePreferencesWindow(win);
-        win.present();
-    });
-    app.run([]);
-}
