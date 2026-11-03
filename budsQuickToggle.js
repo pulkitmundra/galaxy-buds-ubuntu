@@ -66,6 +66,17 @@ class BudsMenuToggle extends QuickSettings.QuickMenuToggle {
             this._runCommand([MANAGER_BIN]);
         });
         this.menu.addMenuItem(this._managerItem);
+
+        this._supportItem = new PopupMenu.PopupMenuItem('Buy Me a Coffee ☕');
+        this._supportItem.connect('activate', () => {
+            QuickSettingsMenu.menu.close();
+            try {
+                Gio.AppInfo.launch_default_for_uri('https://buymeacoffee.com/pulkitmundra', null);
+            } catch (e) {
+                logError(e, 'Buds3Pro failed to open support URL');
+            }
+        });
+        this.menu.addMenuItem(this._supportItem);
     }
 
     _runCommand(argv) {

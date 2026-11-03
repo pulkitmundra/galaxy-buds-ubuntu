@@ -21,7 +21,9 @@ $ buds-switch toggle
 <p align="center">
   <a href="https://github.com/pulkitmundra/galaxy-buds-ubuntu/stargazers"><img src="https://img.shields.io/github/stars/pulkitmundra/galaxy-buds-ubuntu?style=social" alt="GitHub Stars" /></a>&nbsp;
   <a href="https://github.com/pulkitmundra"><img src="https://img.shields.io/badge/Author-%40pulkitmundra-181717?style=flat&logo=github" alt="Author" /></a>&nbsp;
-  <a href="https://pulkit-mundra-portfolio.vercel.app"><img src="https://img.shields.io/badge/Portfolio-pulkit--mundra-2563EB?style=flat&logo=vercel" alt="Portfolio" /></a>
+  <a href="https://pulkit-mundra-portfolio.vercel.app"><img src="https://img.shields.io/badge/Portfolio-pulkit--mundra-2563EB?style=flat&logo=vercel" alt="Portfolio" /></a>&nbsp;
+  <a href="https://buymeacoffee.com/pulkitmundra"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>&nbsp;
+  <a href="https://github.com/sponsors/pulkitmundra"><img src="https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA?style=flat&logo=github-sponsors&logoColor=white" alt="GitHub Sponsors" /></a>
 </p>
 
 <p align="center">
@@ -206,11 +208,19 @@ galaxy-buds-ubuntu/
 ---
 
 <a id="author"></a>
-## 👨🏻‍💻 Author & Contact
+## 👨🏻‍💻 Author, Support & Contact
 
 Built and maintained by **Pulkit Mundra** (Senior Software Developer - SDE-3). Issues, feature requests, and pull requests are welcome!
 
+If this tool saved you from Bluetooth pairing headaches on Ubuntu, consider buying me a coffee or sponsoring the project:
+
 <p align="left">
+  <a href="https://buymeacoffee.com/pulkitmundra">
+    <img src="https://img.shields.io/badge/Buy_Me_a_Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" />
+  </a>
+  <a href="https://github.com/sponsors/pulkitmundra">
+    <img src="https://img.shields.io/badge/Sponsor_on_GitHub-EA4AAA?style=for-the-badge&logo=github-sponsors&logoColor=white" alt="Sponsor on GitHub" />
+  </a>
   <a href="https://pulkit-mundra-portfolio.vercel.app">
     <img src="https://img.shields.io/badge/Portfolio-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Portfolio" />
   </a>
@@ -232,5 +242,5 @@ MIT License (see [`LICENSE`](LICENSE)).
 ---
 
 <p align="center">
-  <b>If this tool saved you from Bluetooth pairing headaches on Ubuntu, please consider giving the repo a ⭐!</b>
+  <b>If this tool saved you from Bluetooth pairing headaches on Ubuntu, please consider giving the repo a ⭐ or <a href="https://buymeacoffee.com/pulkitmundra">buying me a coffee ☕</a>!</b>
 </p>
