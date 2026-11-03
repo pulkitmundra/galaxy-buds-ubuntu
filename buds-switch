@@ -28,9 +28,25 @@ fi
 
 ICON="$HOME/.local/share/icons/earbuds-symbolic.svg"
 
+# Auto-detect paired Samsung Galaxy Buds from BlueZ if BUD_MAC is unconfigured
+auto_detect_bud_mac() {
+  bluetoothctl devices Paired 2>/dev/null | grep -i "Buds" | head -n 1 | awk '{print $2}' || true
+}
+
 if [ -z "${BUD_MAC:-}" ] || [ "${BUD_MAC^^}" = "AA:BB:CC:DD:EE:FF" ]; then
-  msg="BUD_MAC is not configured. Edit $SCRIPT_DIR/.env and set your Galaxy Buds MAC address."
-  notify-send -i "$ICON" "Galaxy Buds3 Pro" "$msg" 2>/dev/null || true
+  DETECTED_MAC="$(auto_detect_bud_mac)"
+  if [ -n "$DETECTED_MAC" ]; then
+    BUD_MAC="$DETECTED_MAC"
+  fi
+fi
+
+if [ "${1:-}" = "settings" ]; then
+  exec "$SCRIPT_DIR/buds-settings"
+fi
+
+if [ -z "${BUD_MAC:-}" ] || [ "${BUD_MAC^^}" = "AA:BB:CC:DD:EE:FF" ]; then
+  msg="BUD_MAC is not configured. Run 'buds-settings' or edit $SCRIPT_DIR/.env to configure your Galaxy Buds."
+  notify-send -i "$ICON" "Samsung Galaxy Buds" "$msg" 2>/dev/null || true
   echo "Error: $msg" >&2
   exit 1
 fi
@@ -38,7 +54,7 @@ fi
 BUD_MAC="${BUD_MAC^^}"
 if ! [[ "$BUD_MAC" =~ ^([0-9A-F]{2}:){5}[0-9A-F]{2}$ ]]; then
   msg="Invalid BUD_MAC format in .env (expected XX:XX:XX:XX:XX:XX)."
-  notify-send -i "$ICON" "Galaxy Buds3 Pro" "$msg" 2>/dev/null || true
+  notify-send -i "$ICON" "Samsung Galaxy Buds" "$msg" 2>/dev/null || true
   echo "Error: $msg" >&2
   exit 1
 fi
@@ -46,7 +62,24 @@ fi
 MAC_UNDERSCORE="${BUD_MAC//:/_}"
 DETECTED_PATH=$(gdbus call --system --dest org.bluez --object-path / --method org.freedesktop.DBus.ObjectManager.GetManagedObjects 2>/dev/null | grep -oE "/org/bluez/hci[0-9]+/dev_${MAC_UNDERSCORE}" | head -n 1 || true)
 BUD_PATH="${DETECTED_PATH:-/org/bluez/hci0/dev_${MAC_UNDERSCORE}}"
+
+get_bud_model_name() {
+  local raw_alias
+  raw_alias=$(gdbus call --system --dest org.bluez --object-path "$BUD_PATH" \
+    --method org.freedesktop.DBus.Properties.Get "org.bluez.Device1" "Alias" 2>/dev/null \
+    | sed -E "s/^\(<'([^']+)'>,\)$/\1/" | sed -E 's/[[:space:]]*\([0-9A-Fa-f]{4}\)[[:space:]]*$//' || true)
+  if [ -n "$raw_alias" ] && [[ "$raw_alias" != *"("* ]]; then
+    echo "$raw_alias"
+  else
+    echo "Samsung Galaxy Buds"
+  fi
+}
+
+BUD_NAME="$(get_bud_model_name)"
+
 MACRODROID_WEBHOOK_BASE="${MACRODROID_WEBHOOK_BASE:-}"
+MACRODROID_WEBHOOK_BASE="${MACRODROID_WEBHOOK_BASE%/}"
+MACRODROID_WEBHOOK_BASE="${MACRODROID_WEBHOOK_BASE%/buds}"
 if [ -n "$MACRODROID_WEBHOOK_BASE" ] && ! [[ "$MACRODROID_WEBHOOK_BASE" =~ ^https?://[A-Za-z0-9._:/-]+$ ]]; then
   echo "Warning: Ignoring invalid MACRODROID_WEBHOOK_BASE URL format." >&2
   MACRODROID_WEBHOOK_BASE=""
@@ -56,15 +89,122 @@ is_connected() {
   bluetoothctl info "$BUD_MAC" 2>/dev/null | grep -q "Connected: yes"
 }
 
+get_battery() {
+  local pct
+  pct=$(gdbus call --system --dest org.bluez --object-path "$BUD_PATH" \
+    --method org.freedesktop.DBus.Properties.Get "org.bluez.Battery1" "Percentage" 2>/dev/null \
+    | grep -oE '0x[0-9a-fA-F]+|[0-9]+' | tail -n 1 || true)
+  if [ -n "$pct" ]; then
+    printf "%d%%\n" "$pct" 2>/dev/null && return 0
+  fi
+  if command -v upower >/dev/null 2>&1; then
+    pct=$(upower -i "/org/freedesktop/UPower/devices/headset_dev_${MAC_UNDERSCORE}" 2>/dev/null | awk '/percentage:/ && !/should be ignored/ {print $2}' | head -n 1 || true)
+    if [ -n "$pct" ] && [ "$pct" != "0%" ]; then
+      echo "$pct"
+      return 0
+    fi
+  fi
+  echo "unknown"
+}
+
 set_default_sink() {
   sleep 1
   local sink_id
   sink_id=$(wpctl status -n 2>/dev/null | awk '/Sinks:/,/Sources:/' | grep -i "bluez_output\.${MAC_UNDERSCORE}" | grep -oE '[0-9]+\.' | head -n 1 | tr -d '.')
   if [ -z "$sink_id" ]; then
-    sink_id=$(wpctl status 2>/dev/null | awk '/Sinks:/,/Sources:/' | grep -i "Galaxy Buds" | grep -oE '[0-9]+\.' | head -n 1 | tr -d '.')
+    sink_id=$(wpctl status 2>/dev/null | awk '/Sinks:/,/Sources:/' | grep -iE "Buds|${BUD_NAME}" | grep -oE '[0-9]+\.' | head -n 1 | tr -d '.')
   fi
   if [ -n "$sink_id" ]; then
     wpctl set-default "$sink_id" 2>/dev/null || true
+  fi
+}
+
+switch_audio_profile() {
+  local target_mode="${1:-}"
+  if [ -z "$target_mode" ]; then
+    python3 - "$MAC_UNDERSCORE" << 'PYEOF'
+import json, subprocess, sys
+mac_u = sys.argv[1].upper()
+try:
+    data = json.loads(subprocess.check_output(["pw-dump"], text=True))
+    for obj in data:
+        if obj.get("type") == "PipeWire:Interface:Device":
+            dev_name = str(obj.get("info", {}).get("props", {}).get("device.name", "")).upper()
+            if mac_u in dev_name:
+                profs = obj.get("info", {}).get("params", {}).get("Profile", [])
+                if profs:
+                    print(profs[0].get("name", "unknown"))
+                    sys.exit(0)
+except Exception:
+    pass
+print("inactive")
+PYEOF
+    return 0
+  fi
+
+  if ! is_connected; then
+    msg="Connect your $BUD_NAME first before switching audio profiles."
+    notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "$BUD_NAME" "$msg" 2>/dev/null || true
+    echo "$msg" >&2
+    exit 1
+  fi
+
+  local result
+  result=$(python3 - "$MAC_UNDERSCORE" "$target_mode" << 'PYEOF'
+import json, subprocess, sys
+
+mac_u = sys.argv[1].upper()
+mode = sys.argv[2].lower()
+prefix = "a2dp-sink" if mode in ("a2dp", "music") else "headset-head-unit"
+
+try:
+    data = json.loads(subprocess.check_output(["pw-dump"], text=True))
+    for obj in data:
+        if obj.get("type") != "PipeWire:Interface:Device":
+            continue
+        dev_name = str(obj.get("info", {}).get("props", {}).get("device.name", "")).upper()
+        if mac_u not in dev_name:
+            continue
+        dev_id = str(obj["id"])
+        enum_profiles = obj.get("info", {}).get("params", {}).get("EnumProfile", [])
+        candidates = [p for p in enum_profiles if str(p.get("name", "")).startswith(prefix) and p.get("available") != "no"]
+        if not candidates:
+            candidates = [p for p in enum_profiles if str(p.get("name", "")).startswith(prefix)]
+        if candidates:
+            # Prefer standard a2dp-sink or mSBC HFP profile
+            chosen = candidates[0]
+            for c in candidates:
+                if c.get("name") in ("a2dp-sink", "headset-head-unit"):
+                    chosen = c
+                    break
+            idx = str(chosen["index"])
+            subprocess.check_call(["wpctl", "set-profile", dev_id, idx])
+            print(f"OK:{chosen.get('description') or chosen.get('name')}")
+            sys.exit(0)
+except Exception as e:
+    print(f"ERR:{e}")
+    sys.exit(1)
+
+print("ERR:Bluetooth audio card not found in PipeWire")
+sys.exit(1)
+PYEOF
+  )
+
+  if [[ "$result" == OK:* ]]; then
+    local desc="${result#OK:}"
+    set_default_sink
+    local label="High-Fidelity Music (A2DP)"
+    if [[ "${target_mode,,}" == "hfp" || "${target_mode,,}" == "call" ]]; then
+      label="Call + Microphone (HFP)"
+    fi
+    notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "$BUD_NAME" "Audio Mode: $label ($desc)" 2>/dev/null || true
+    echo "Switched to $label ($desc)"
+    return 0
+  else
+    local err="${result#ERR:}"
+    notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "$BUD_NAME" "Could not switch audio profile: $err" 2>/dev/null || true
+    echo "Error: $err" >&2
+    return 1
   fi
 }
 
@@ -83,7 +223,7 @@ connect_buds() {
     set_default_sink
     exit 0
   fi
-  notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "Galaxy Buds3 Pro" "Pulling earbuds from phone to Ubuntu..." 2>/dev/null || true
+  notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "$BUD_NAME" "Pulling earbuds from phone to Ubuntu..." 2>/dev/null || true
   bluetoothctl power on >/dev/null 2>&1 || true
 
   connect_bredr_profiles || {
@@ -93,17 +233,23 @@ connect_buds() {
 
   if is_connected; then
     set_default_sink
-    notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "Galaxy Buds3 Pro" "Connected to Ubuntu" 2>/dev/null || true
+    local batt
+    batt="$(get_battery)"
+    if [ "$batt" != "unknown" ]; then
+      notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "$BUD_NAME" "Connected to Ubuntu (Battery: $batt)" 2>/dev/null || true
+    else
+      notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "$BUD_NAME" "Connected to Ubuntu" 2>/dev/null || true
+    fi
     exit 0
   else
-    notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "Galaxy Buds3 Pro" "Could not connect. Make sure earbuds are out of the case." 2>/dev/null || true
+    notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "$BUD_NAME" "Could not connect. Make sure earbuds are out of the case." 2>/dev/null || true
     exit 1
   fi
 }
 
 disconnect_buds() {
   bluetoothctl disconnect "$BUD_MAC" >/dev/null 2>&1 || true
-  notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "Galaxy Buds3 Pro" "Switching earbuds to Android..." 2>/dev/null || true
+  notify-send -i "$ICON" -h string:x-canonical-private-synchronous:buds-switch "$BUD_NAME" "Switching earbuds to Android..." 2>/dev/null || true
   if [ -n "$MACRODROID_WEBHOOK_BASE" ]; then
     (
       sleep 0.5
@@ -118,6 +264,15 @@ case "${1:-toggle}" in
     ;;
   disconnect)
     disconnect_buds
+    ;;
+  profile)
+    switch_audio_profile "${2:-}"
+    ;;
+  battery)
+    get_battery
+    ;;
+  settings)
+    exec "$SCRIPT_DIR/buds-settings"
     ;;
   status)
     if is_connected; then

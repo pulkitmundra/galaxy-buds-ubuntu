@@ -1,25 +1,28 @@
 ```bash
 $ buds-switch toggle
+$ buds-settings
 ```
 
-<h1 align="center">🎧 Galaxy Buds3 Pro - Ubuntu & Android Seamless Switcher</h1>
-<h3 align="center">One-Click GNOME Quick Settings Toggle & Bidirectional Audio Handoff for Linux</h3>
+<h1 align="center">🎧 Samsung Galaxy Buds - Ubuntu & Android Seamless Switcher</h1>
+<h3 align="center">One-Click GNOME Quick Settings Toggle, Bidirectional Audio Handoff, A2DP/HFP Switcher & GTK4 Setup GUI for Linux</h3>
 
 <p align="center">
   <a href="https://github.com/pulkitmundra/galaxy-buds-ubuntu">
-    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&pause=1000&color=38BDF8&center=true&vCenter=true&width=760&lines=Samsung+Galaxy+Buds3+Pro+Seamless+Switcher+for+Ubuntu+24.04%2B;Native+GNOME+45-48+Quick+Settings+Pill+%26+Real-Time+D-Bus+Sync;Fixes+BlueZ+LE+Audio+vs.+Classic+BR%2FEDR+Contention+(A2DP%2FHFP);Instant+Bidirectional+Ubuntu+%3C-%3E+Android+Handoff+via+PipeWire" alt="Typing SVG" />
+    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=19&pause=1000&color=38BDF8&center=true&vCenter=true&width=820&lines=Universal+Samsung+Galaxy+Buds+Switcher+for+Ubuntu+24.04%2B+(Buds3+Pro%2C+Buds2+Pro%2C+FE%2C+etc.);Native+GNOME+45-48+Quick+Settings+Pill+%2B+Live+Battery+%25+%26+A2DP%2FHFP+Audio+Toggle;Fixes+BlueZ+LE+Audio+vs.+Classic+BR%2FEDR+Contention+(A2DP%2FAVRCP%2FHFP);Built-In+GTK4+%2F+Libadwaita+Settings+%26+Android+MacroDroid+Webhook+Setup+Guide" alt="Typing SVG" />
   </a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Ubuntu-24.04%2B%20LTS-E95420?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Ubuntu 24.04+" />
   <img src="https://img.shields.io/badge/GNOME%20Shell-45%20%7C%2046%20%7C%2047%20%7C%2048-4A86CF?style=for-the-badge&logo=gnome&logoColor=white" alt="GNOME Shell 45-48" />
+  <img src="https://img.shields.io/badge/Models-Buds3%20Pro%20%7C%20Buds2%20Pro%20%7C%20Buds%20FE%20%7C%20All%20Galaxy%20Buds-1428A0?style=for-the-badge&logo=samsung&logoColor=white" alt="All Samsung Galaxy Buds" />
   <img src="https://img.shields.io/badge/Audio-BlueZ%20D--Bus%20%2B%20PipeWire-0082FC?style=for-the-badge&logo=bluetooth&logoColor=white" alt="BlueZ PipeWire" />
   <img src="https://img.shields.io/badge/License-MIT-10B981?style=for-the-badge" alt="MIT License" />
 </p>
 
 <p align="center">
   <a href="https://github.com/pulkitmundra/galaxy-buds-ubuntu/stargazers"><img src="https://img.shields.io/github/stars/pulkitmundra/galaxy-buds-ubuntu?style=social" alt="GitHub Stars" /></a>&nbsp;
+  <a href="https://github.com/pulkitmundra/galaxy-buds-ubuntu/releases"><img src="https://img.shields.io/github/v/release/pulkitmundra/galaxy-buds-ubuntu?color=38bdf8&label=Release" alt="Latest Release" /></a>&nbsp;
   <a href="https://github.com/pulkitmundra"><img src="https://img.shields.io/badge/Author-%40pulkitmundra-181717?style=flat&logo=github" alt="Author" /></a>&nbsp;
   <a href="https://pulkit-mundra-portfolio.vercel.app"><img src="https://img.shields.io/badge/Portfolio-pulkit--mundra-2563EB?style=flat&logo=vercel" alt="Portfolio" /></a>&nbsp;
   <a href="https://buymeacoffee.com/pulkitmundra"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>&nbsp;
@@ -28,6 +31,8 @@ $ buds-switch toggle
 
 <p align="center">
   <a href="#why-this-exists">Why This Exists</a> -
+  <a href="#supported-models">Supported Models</a> -
+  <a href="#settings-gui">Settings & Setup GUI</a> -
   <a href="#architecture">Architecture</a> -
   <a href="#quick-start">Quick Start</a> -
   <a href="#android-setup">Android Setup</a> -
@@ -40,18 +45,55 @@ $ buds-switch toggle
 <a id="why-this-exists"></a>
 ## ⚡ The Problem & How This Solves It
 
-Samsung Galaxy Buds3 Pro only support *Samsung Seamless Switch* between Samsung Galaxy devices, and advertise **both** Classic Bluetooth (`BR/EDR`) and Bluetooth Low Energy (`LE Audio`) over the same MAC address. On Ubuntu/Linux (`BlueZ`), this causes two major headaches:
+Samsung Galaxy Buds only support *Samsung Seamless Switch* between Samsung OneUI devices, and newer models (`Buds3 Pro`, `Buds3`, `Buds2 Pro`) advertise **both** Classic Bluetooth (`BR/EDR`) and Bluetooth Low Energy (`LE Audio`) over the same MAC address. On Ubuntu/Linux (`BlueZ`), this causes major headaches:
 
-1. **LE Audio (`BAP`) Contention**: Standard `bluetoothctl connect` or clicking Connect in GNOME Settings frequently hangs or fails because BlueZ attempts to negotiate experimental LE Audio (`BAP`) instead of Classic Audio (`A2DP Sink` / `AVRCP` / `HFP`).
+1. **LE Audio (`BAP`) Contention**: Standard `bluetoothctl connect` or clicking Connect in GNOME Settings frequently hangs or fails on dual-mode earbuds because BlueZ attempts to negotiate experimental LE Audio (`BAP`) instead of Classic Audio (`A2DP Sink` / `AVRCP` / `HFP`).
 2. **Dead Air on Disconnect**: Disconnecting the earbuds from Ubuntu leaves them idle instead of reconnecting them back to your Android phone.
+3. **Buried Audio Profile Switching**: Switching between High-Fidelity Stereo Music (`A2DP`) and Call + Microphone (`HFP/HSP`) normally requires digging through GNOME Sound Settings.
 
-| Behavior | Stock Ubuntu Bluetooth | `galaxy-buds-ubuntu` |
+| Behavior | Stock Ubuntu Bluetooth | `galaxy-buds-ubuntu` (v1.1.0) |
 | :--- | :---: | :---: |
 | **Steal Audio from Android in 1 Click** | `[ ]` Often fails on LE Audio | `[x]` Connects `BR/EDR` UUIDs (`A2DP`, `AVRCP`, `HFP`) over D-Bus |
+| **Universal Samsung Galaxy Buds Support** | `[ ]` Generic Bluetooth menu | `[x]` Auto-detects model name (`Buds3 Pro`, `Buds2 Pro`, `Buds FE`, etc.) |
+| **Live Battery % in GNOME Quick Settings** | `[ ]` Hidden in settings | `[x]` Shows `Connected - 85%` right on the Quick Settings pill |
+| **1-Click Music (`A2DP`) vs Call (`HFP`) Toggle** | `[ ]` Buried in Sound Settings | `[x]` Built into Quick Settings menu + `buds-switch profile [a2dp\|hfp]` |
 | **Auto-Set PipeWire Default Output Sink** | `[ ]` Manual switch needed | `[x]` Automatically routes via `wpctl` |
 | **Push Audio Back to Android on Disconnect** | `[ ]` Leaves earbuds idle | `[x]` Triggers MacroDroid webhook for instant phone reconnect |
-| **Prevent Unsolicited Boot/Wake Audio Stealing** | `[ ]` Steals audio on laptop wake | `[x]` On-demand adapter power + `AutoEnable=false` |
-| **Native GNOME Top-Bar Quick Settings Pill** | `[ ]` Buried in submenu | `[x]` Dedicated **Buds3 Pro** pill + **GalaxyBudsClient** launcher |
+| **Native GTK4 Settings & Setup Guide GUI** | `[ ]` Manual config files | `[x]` 3-tab Libadwaita app (`buds-settings`) with 1-click MAC detection & webhook test |
+
+---
+
+<a id="supported-models"></a>
+## 🎧 Supported Samsung Galaxy Buds Models
+
+All Samsung Galaxy Buds models implement the same Classic Bluetooth (`BR/EDR`) profile UUIDs (`A2DP Sink 0000110b`, `AVRCP 0000110e`, `HFP 0000111e`) and keep a passive Classic Bluetooth listener active while connected to your phone:
+
+| Samsung Model | 1-Click Pull to Ubuntu | 1-Click Push to Android | Live Battery `%` & `A2DP`/`HFP` Toggle | Notes |
+| :--- | :---: | :---: | :---: | :--- |
+| **Galaxy Buds3 Pro** | `[x]` | `[x]` | `[x]` | Bypasses `LE Audio (BAP)` contention via explicit `BR/EDR` profile connect |
+| **Galaxy Buds3** | `[x]` | `[x]` | `[x]` | Bypasses `LE Audio (BAP)` contention via explicit `BR/EDR` profile connect |
+| **Galaxy Buds2 Pro** | `[x]` | `[x]` | `[x]` | Bypasses `LE Audio` contention + full `GalaxyBudsClient` support |
+| **Galaxy Buds2** | `[x]` | `[x]` | `[x]` | Instant passive `BR/EDR` takeover + full `GalaxyBudsClient` support |
+| **Galaxy Buds Pro** | `[x]` | `[x]` | `[x]` | Instant passive `BR/EDR` takeover + full `GalaxyBudsClient` support |
+| **Galaxy Buds FE** | `[x]` | `[x]` | `[x]` | Instant passive `BR/EDR` takeover + full `GalaxyBudsClient` support |
+| **Galaxy Buds Live** | `[x]` | `[x]` | `[x]` | Instant passive `BR/EDR` takeover + full `GalaxyBudsClient` support |
+| **Galaxy Buds+ / Buds** | `[x]` | `[x]` | `[x]` | Instant passive `BR/EDR` takeover + full `GalaxyBudsClient` support |
+
+---
+
+<a id="settings-gui"></a>
+## 🖥️ Native GTK4 / Libadwaita Settings & Android Setup GUI (`buds-settings`)
+
+Run `buds-settings` from your terminal or click **"Settings & Android Setup Guide"** directly inside the GNOME Quick Settings dropdown menu to open the native 3-tab GTK4 / Libadwaita configuration window:
+
+1. **Tab 1 - Configuration (`Configuration`):**
+   - **Auto-Detect Paired Buds**: 1-click scan of BlueZ (`org.bluez.Device1`) that automatically detects any paired Samsung Galaxy Buds model and populates `BUD_MAC`.
+   - **MacroDroid Webhook Configurator & Live Tester**: Save your `MACRODROID_WEBHOOK_BASE` URL (with automatic `0600` file permissions) and click **Test Webhook on Phone** to verify instant Android reconnection.
+   - **Live Controls**: Connect, disconnect, or switch between **High-Fidelity Music (`A2DP`)** and **Call + Mic (`HFP`)** directly from the GUI.
+2. **Tab 2 - Android Setup (`Android Setup`):**
+   - Interactive step-by-step guide for configuring the MacroDroid webhook on Android (`buds` trigger + 2-second retry action + Unrestricted battery setting) plus a 1-click copy helper for Ubuntu's `/etc/bluetooth/main.conf` (`AutoEnable=false`).
+3. **Tab 3 - Info & Support (`Info & Support`):**
+   - Real-time diagnostics (detected model name, BlueZ adapter path `/org/bluez/hciX/...`, connection & battery `%`, active PipeWire profile, webhook status, and `GalaxyBudsClient` installation state) + quick links to support the project.
 
 ---
 
@@ -61,15 +103,18 @@ Samsung Galaxy Buds3 Pro only support *Samsung Seamless Switch* between Samsung 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant User as Ubuntu Desktop (GNOME Pill / CLI)
-    participant BlueZ as BlueZ D-Bus & PipeWire (wpctl)
-    participant Buds as Galaxy Buds3 Pro
+    participant User as Ubuntu Desktop (GNOME Pill / GUI / CLI)
+    participant BlueZ as BlueZ D-Bus & PipeWire (wpctl + pw-dump)
+    participant Buds as Samsung Galaxy Buds (All Models)
     participant Phone as Android Phone (MacroDroid)
 
     Note over User,Phone: Pull Audio to Ubuntu (buds-switch connect)
     User->>BlueZ: ConnectProfile(A2DP 0000110b, AVRCP 0000110e, HFP 0000111e)
     BlueZ->>Buds: Steal active BR/EDR link from Android
-    BlueZ->>User: Set default PipeWire audio sink (wpctl) + Desktop Notification
+    BlueZ->>User: Set default PipeWire sink + update Quick Settings pill (Connected - Battery%)
+
+    Note over User,Phone: Switch Audio Mode on Ubuntu (buds-switch profile a2dp|hfp)
+    User->>BlueZ: wpctl set-profile (High-Fidelity Music A2DP <-> Call + Mic HFP)
 
     Note over User,Phone: Push Audio Back to Android (buds-switch disconnect)
     User->>BlueZ: Disconnect earbuds from Ubuntu
@@ -86,7 +131,7 @@ sequenceDiagram
 
 ```bash
 sudo apt update
-sudo apt install -y bluez libglib2.0-bin libnotify-bin curl wireplumber gnome-shell-extension-prefs
+sudo apt install -y bluez libglib2.0-bin libnotify-bin curl wireplumber pipewire-bin gjs gir1.2-adw-1 gnome-shell-extension-prefs zip
 ```
 
 <details open>
@@ -99,7 +144,7 @@ sudo sed -i 's/^#*AutoEnable\s*=.*/AutoEnable=false/' /etc/bluetooth/main.conf
 sudo systemctl restart bluetooth
 ```
 
-Pair and trust your Galaxy Buds3 Pro once with Ubuntu while they are in pairing mode:
+Pair and trust your Samsung Galaxy Buds once with Ubuntu while they are in pairing mode:
 ```bash
 bluetoothctl
 # Inside bluetoothctl:
@@ -112,38 +157,38 @@ bluetoothctl
 
 </details>
 
-### 2. Clone & Configure `.env`
-
-Clone the repository, copy `.env.example` to `.env`, and set your earbuds' Bluetooth MAC address and (optionally) your MacroDroid webhook URL:
+### 2. Clone & Run the Automated Installer
 
 ```bash
 git clone https://github.com/pulkitmundra/galaxy-buds-ubuntu.git ~/Desktop/prsnl/galaxy-buds-ubuntu
 cd ~/Desktop/prsnl/galaxy-buds-ubuntu
-cp .env.example .env
-nano .env
+chmod +x install.sh
+./install.sh
 ```
+
+### 3. Configure via GUI (`buds-settings`) or `.env`
+
+Launch the native GTK4 Settings & Setup Guide GUI:
+
+```bash
+buds-settings
+```
+
+Click **"Auto-Detect Paired Buds"**, paste your optional MacroDroid webhook URL, and click **"Save Configuration"** (or edit `.env` manually):
 
 ```ini
 BUD_MAC="XX:XX:XX:XX:XX:XX"
 MACRODROID_WEBHOOK_BASE="https://trigger.macrodroid.com/YOUR-UUID-HERE"
 ```
 
-### 3. Run the Automated Installer
-
-```bash
-chmod +x install.sh
-./install.sh
-```
-
 <details>
 <summary><b>🔍 What <code>./install.sh</code> configures (Click to expand)</b></summary><br>
 
-1. Symlinks `.env` -> `~/.config/buds-switch.env`
-2. Symlinks `buds-switch` -> `~/.local/bin/buds-switch`
+1. Symlinks `.env` -> `~/.config/buds-switch.env` (`0600` owner-only permissions)
+2. Symlinks `buds-switch` -> `~/.local/bin/buds-switch` and `buds-settings` -> `~/.local/bin/buds-settings`
 3. Symlinks `earbuds-symbolic.svg` -> `~/.local/share/icons/earbuds-symbolic.svg`
-4. Downloads the official portable **GalaxyBudsClient** binary to `~/.local/opt/galaxybudsclient/GalaxyBudsClient` (if not already present) and installs `~/.local/share/applications/galaxybudsclient.desktop`
-5. Installs and enables the GNOME Shell Quick Settings extension (`buds-quick-toggle@local`).
-   - *Note*: On Wayland sessions, log out and log back in once so GNOME Shell discovers the new extension.
+4. Downloads the official portable **GalaxyBudsClient** binary to `~/.local/opt/galaxybudsclient/GalaxyBudsClient` (verified via SHA-256 checksum) and installs `~/.local/share/applications/galaxybudsclient.desktop`
+5. Installs and enables the GNOME Shell Quick Settings extension (`galaxy-buds-switcher@pulkitmundra.github.io`) and builds the distributable store package in `dist/galaxy-buds-switcher@pulkitmundra.github.io.shell-extension.zip`.
 
 </details>
 
@@ -153,19 +198,19 @@ chmod +x install.sh
 ## 📱 Android Auto-Reconnect Setup (MacroDroid)
 
 <details open>
-<summary><b>Step-by-Step MacroDroid Webhook Configuration</b></summary><br>
+<summary><b>Step-by-Step MacroDroid Webhook Configuration (Also available inside <code>buds-settings</code>)</b></summary><br>
 
 To make your Android phone automatically grab the earbuds the instant you click **Disconnect** on Ubuntu:
 
 1. Install **MacroDroid** from the Google Play Store on your Android phone.
 2. Create a new Macro named **Connect Buds**:
    - **Trigger**: `Webhook (Url)` -> Set identifier to `buds`
-     - Copy the generated base URL (`https://trigger.macrodroid.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`) into `MACRODROID_WEBHOOK_BASE` in your `.env` file (without `/buds` at the end).
+     - Copy the generated base URL (`https://trigger.macrodroid.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`) into the **Configuration** tab of `buds-settings` (or `MACRODROID_WEBHOOK_BASE` in `.env`, without `/buds` at the end).
    - **Actions**:
-     1. `Configure Bluetooth` -> **Connect to Audio Device** -> Select your **Galaxy Buds3 Pro**
+     1. `Configure Bluetooth` -> **Connect to Audio Device** -> Select your **Galaxy Buds**
      2. `Wait Before Next Action` -> **2 Seconds**
-     3. `Configure Bluetooth` -> **Connect to Audio Device** -> Select your **Galaxy Buds3 Pro** *(second retry ensures connection if BlueZ takes a moment to release the RFCOMM link)*
-3. Save and enable the Macro, and set MacroDroid's battery optimization to **Unrestricted** on Android so webhooks deliver instantaneously while the phone screen is off.
+     3. `Configure Bluetooth` -> **Connect to Audio Device** -> Select your **Galaxy Buds** *(second retry ensures connection if BlueZ takes a moment to release the RFCOMM link)*
+3. Save and enable the Macro, and set MacroDroid's battery optimization to **Unrestricted** on Android (`Settings -> Apps -> MacroDroid -> Battery -> Unrestricted`) so webhooks deliver instantaneously while the phone screen is off.
 
 </details>
 
@@ -179,6 +224,10 @@ To make your Android phone automatically grab the earbuds the instant you click 
 | `buds-switch toggle` | Toggle connection between Ubuntu and Android |
 | `buds-switch connect` | Pull earbuds from Android to Ubuntu (`A2DP` + `AVRCP` + `HFP`) and set default PipeWire sink |
 | `buds-switch disconnect` | Disconnect from Ubuntu and trigger Android MacroDroid webhook |
+| `buds-switch profile a2dp` | Switch Ubuntu audio mode to **High-Fidelity Music (`A2DP Sink`)** |
+| `buds-switch profile hfp` | Switch Ubuntu audio mode to **Call + Microphone (`HFP/HSP`)** |
+| `buds-switch battery` | Print current earbuds battery percentage (e.g. `85%`) |
+| `buds-switch settings` | Open the GTK4 / Libadwaita Settings & Android Setup Guide GUI (`buds-settings`) |
 | `buds-switch status` | Prints `connected` or `disconnected` |
 
 > [!TIP]
@@ -191,13 +240,17 @@ To make your Android phone automatically grab the earbuds the instant you click 
 
 ```text
 galaxy-buds-ubuntu/
-├── buds-switch                 # CLI script (connect | disconnect | toggle | status)
-├── budsQuickToggle.js          # GNOME Shell Quick Settings indicator & menu toggle
+├── buds-switch                 # CLI engine (connect | disconnect | toggle | profile | battery | settings | status)
+├── buds-settings               # Standalone launcher for the GTK4 / Libadwaita Settings & Setup Guide GUI
+├── budsSettingsWindow.js       # 3-tab GTK4 / Libadwaita PreferencesWindow (Configuration, Android Setup, Info & Support)
+├── budsQuickToggle.js          # GNOME Shell Quick Settings indicator, live battery %, A2DP/HFP & menu toggle
 ├── extension.js                # Standalone GNOME Shell extension entrypoint
-├── metadata.json               # Standalone GNOME Shell extension metadata
+├── prefs.js                    # GNOME Shell ExtensionPreferences entrypoint
+├── metadata.json               # GNOME Extensions Store metadata (galaxy-buds-switcher@pulkitmundra.github.io)
 ├── earbuds-symbolic.svg        # Symbolic icon for GNOME Shell & desktop notifications
 ├── galaxybudsclient.desktop    # Desktop launcher template for GalaxyBudsClient GUI
-├── install.sh                  # Automated setup script for a fresh Ubuntu install
+├── install.sh                  # Automated setup & store bundle packaging script
+├── CHANGELOG.md                # Release history
 ├── LICENSE                     # MIT License
 ├── .env.example                # Template for your Bluetooth MAC & MacroDroid webhook
 └── .gitignore                  # Ignores .env so personal MAC/webhook are never committed

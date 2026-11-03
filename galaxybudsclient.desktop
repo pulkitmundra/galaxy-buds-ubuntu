@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Galaxy Buds Manager
-Comment=Manage Galaxy Buds3 Pro (ANC, Battery, Equalizer)
+Comment=Manage Samsung Galaxy Buds (ANC, Ambient, Battery, Equalizer, Touch Controls)
 Exec=__HOME__/.local/opt/galaxybudsclient/GalaxyBudsClient
 Terminal=false
 Type=Application
