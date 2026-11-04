@@ -17,6 +17,22 @@ read_env_var() {
   grep -E "^[[:space:]]*${key}[[:space:]]*=" "$file" | tail -n 1 | sed -E "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*//; s/[[:space:]]*#.*$//; s/^[\"']//; s/[\"']$//"
 }
 
+read_gsetting() {
+  local key="$1"
+  if command -v gsettings >/dev/null 2>&1 && [ -d "$SCRIPT_DIR/schemas" ]; then
+    gsettings --schemadir "$SCRIPT_DIR/schemas" get org.gnome.shell.extensions.galaxy-buds-switcher "$key" 2>/dev/null | sed -E "s/^'//; s/'$//" || true
+  elif command -v dconf >/dev/null 2>&1; then
+    dconf read "/org/gnome/shell/extensions/galaxy-buds-switcher/$key" 2>/dev/null | sed -E "s/^'//; s/'$//" || true
+  fi
+}
+
+if [ -z "${BUD_MAC:-}" ]; then
+  BUD_MAC="$(read_gsetting "bud-mac")"
+fi
+if [ -z "${MACRODROID_WEBHOOK_BASE:-}" ]; then
+  MACRODROID_WEBHOOK_BASE="$(read_gsetting "macrodroid-webhook")"
+fi
+
 if [ -n "$ENV_FILE" ]; then
   if [ -z "${BUD_MAC:-}" ]; then
     BUD_MAC="$(read_env_var "BUD_MAC" "$ENV_FILE")"
