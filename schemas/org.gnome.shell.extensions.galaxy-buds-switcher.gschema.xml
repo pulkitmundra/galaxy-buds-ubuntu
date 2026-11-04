@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.galaxy-buds-switcher" path="/org/gnome/shell/extensions/galaxy-buds-switcher/">
+    <key name="bud-mac" type="s">
+      <default>""</default>
+      <summary>Galaxy Buds Bluetooth MAC Address</summary>
+      <description>Bluetooth MAC address in XX:XX:XX:XX:XX:XX format. Leave empty to auto-detect paired Galaxy Buds.</description>
+    </key>
+    <key name="macrodroid-webhook" type="s">
+      <default>""</default>
+      <summary>MacroDroid Webhook Base URL</summary>
+      <description>Optional MacroDroid webhook base URL triggered when disconnecting from Ubuntu to reconnect on Android.</description>
+    </key>
+  </schema>
+</schemalist>

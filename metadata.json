@@ -1,12 +1,12 @@
 {
   "uuid": "galaxy-buds-switcher@pulkitmundra.github.io",
   "name": "Samsung Galaxy Buds Quick Settings Switcher",
-  "description": "One-click Ubuntu / Android switcher, live battery indicator, A2DP/HFP audio profile toggle, and MacroDroid webhook settings for Samsung Galaxy Buds (Buds3 Pro, Buds3, Buds2 Pro, Buds2, Buds Pro, Buds FE, Buds Live, Buds+) in GNOME Quick Settings.",
+  "description": "One-click Ubuntu / Android switcher, live battery indicator, A2DP/HFP audio profile toggle, and MacroDroid webhook handoff for Samsung Galaxy Buds in GNOME Quick Settings.",
   "shell-version": ["45", "46", "47", "48"],
+  "settings-schema": "org.gnome.shell.extensions.galaxy-buds-switcher",
   "url": "https://github.com/pulkitmundra/galaxy-buds-ubuntu",
   "donations": {
     "buymeacoffee": "pulkitmundra",
     "github": "pulkitmundra"
-  },
-  "version": 2
+  }
 }

@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+EXT_UUID="galaxy-buds-switcher@pulkitmundra.github.io"
+if gnome-extensions info "$EXT_UUID" >/dev/null 2>&1; then
+  exec gnome-extensions prefs "$EXT_UUID" "$@"
+fi
+
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 TMP_RUNNER="$(mktemp --suffix=.js)"
 trap 'rm -f "$TMP_RUNNER"' EXIT
 
-cat > "$TMP_RUNNER" <<EOF
-import Adw from 'gi://Adw?version=1';
-import Gio from 'gi://Gio';
-import { populatePreferencesWindow } from 'file://${SCRIPT_DIR}/budsSettingsWindow.js';
+sed "s|import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';|class ExtensionPreferences { getSettings() { const src = Gio.SettingsSchemaSource.new_from_directory('${SCRIPT_DIR}/schemas', Gio.SettingsSchemaSource.get_default(), false); return new Gio.Settings({ settings_schema: src.lookup('org.gnome.shell.extensions.galaxy-buds-switcher', true) }); } }|" \
+  "$SCRIPT_DIR/prefs.js" > "$TMP_RUNNER"
+
+cat >> "$TMP_RUNNER" <<'EOF'
 
 Adw.init();
 const app = new Adw.Application({
@@ -16,11 +21,12 @@ const app = new Adw.Application({
     flags: Gio.ApplicationFlags.NON_UNIQUE,
 });
 app.connect('activate', application => {
-    const win = new Adw.PreferencesWindow({ application });
-    populatePreferencesWindow(win);
+    const win = new Adw.PreferencesWindow({application});
+    const prefs = new BudsQuickTogglePreferences();
+    prefs.fillPreferencesWindow(win);
     win.present();
 });
 app.run([]);
 EOF
 
-gjs -m "$TMP_RUNNER" "$@"
+GSETTINGS_SCHEMA_DIR="$SCRIPT_DIR/schemas" gjs -m "$TMP_RUNNER" "$@"
