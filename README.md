@@ -260,6 +260,27 @@ galaxy-buds-ubuntu/
 
 ---
 
+<a id="faq"></a>
+## ❓ Frequently Asked Questions (Samsung Galaxy Buds on Ubuntu & Linux)
+
+### How do I get Multipoint Bluetooth switching for Samsung Galaxy Buds3 Pro, Buds2 Pro, or Buds FE on Ubuntu/Linux?
+Samsung Galaxy Buds only support "Seamless Earbud Connection" inside Samsung's proprietary One UI ecosystem, not standard Bluetooth Multipoint with Linux PCs. **Galaxy Buds Ubuntu Switcher** bridges that gap on GNOME 45-48 by exploiting Galaxy Buds' passive Bluetooth takeover behavior (`bluez` + `PipeWire`) together with an optional lightweight Android MacroDroid UDP/Webhook bridge, giving you one-click switching in the GNOME top-right Quick Settings menu and automatic handoff when your Android phone rings.
+
+### How do I check Samsung Galaxy Buds battery percentage and switch between A2DP and HFP on Ubuntu?
+Once installed (`./install.sh`), the GNOME Quick Settings pill displays live earbuds battery percentage (`UPower` / `BlueZ Battery1`) and expands into a submenu to switch between **High-Fidelity Music (`A2DP Sink`)** and **Call + Microphone (`HFP/HSP`)** with a single click or via `buds-switch profile a2dp|hfp`.
+
+---
+
+<a id="more-projects"></a>
+## 🔗 More Linux & Ubuntu Desktop Apps by Pulkit Mundra
+
+| Project | Description | Links |
+| :--- | :--- | :--- |
+| **[Crunchyroll Ubuntu Desktop](https://github.com/pulkitmundra/crunchyroll-ubuntu-desktop)** | Unofficial Linux Desktop & HTPC client for Crunchyroll with Widevine DRM, Custom Lists, Auto-Skip HUD, In-Player Quality Selector, Sleep Timer & Auto-PiP Mini-Player | [GitHub](https://github.com/pulkitmundra/crunchyroll-ubuntu-desktop) · [Snap Store](https://snapcraft.io/crunchyroll-ubuntu-desktop) |
+| **[NVR Command Center](https://github.com/pulkitmundra/nvr-command-center)** | Ultra-low-latency GPU RTSP IP Camera, CCTV, NVR/DVR/XVR & Cloud P2P Surveillance Viewer for Linux/Ubuntu in Native Rust (Dahua SmartPSS/DMSS, CP Plus KVMS/gCMOB, Hikvision iVMS-4200, Amcrest, ONVIF) | [GitHub](https://github.com/pulkitmundra/nvr-command-center) · [Snap Store](https://snapcraft.io/nvr-command-center) |
+
+---
+
 <a id="author"></a>
 ## 👨🏻‍💻 Author, Support & Contact
 
