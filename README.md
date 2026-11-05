@@ -22,6 +22,7 @@ $ buds-settings
 
 <p align="center">
   <a href="https://github.com/pulkitmundra/galaxy-buds-ubuntu/stargazers"><img src="https://img.shields.io/github/stars/pulkitmundra/galaxy-buds-ubuntu?style=social" alt="GitHub Stars" /></a>&nbsp;
+  <a href="https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/"><img src="https://img.shields.io/badge/GNOME_Extensions-v1.2.0_(Approved)-4A86CF?style=flat&logo=gnome&logoColor=white" alt="GNOME Extensions Store" /></a>&nbsp;
   <a href="https://github.com/pulkitmundra/galaxy-buds-ubuntu/releases"><img src="https://img.shields.io/github/v/release/pulkitmundra/galaxy-buds-ubuntu?color=38bdf8&label=Release" alt="Latest Release" /></a>&nbsp;
   <a href="https://github.com/pulkitmundra"><img src="https://img.shields.io/badge/Author-%40pulkitmundra-181717?style=flat&logo=github" alt="Author" /></a>&nbsp;
   <a href="https://pulkit-mundra-portfolio.vercel.app"><img src="https://img.shields.io/badge/Portfolio-pulkit--mundra-2563EB?style=flat&logo=vercel" alt="Portfolio" /></a>&nbsp;
@@ -51,15 +52,16 @@ Samsung Galaxy Buds only support *Samsung Seamless Switch* between Samsung OneUI
 2. **Dead Air on Disconnect**: Disconnecting the earbuds from Ubuntu leaves them idle instead of reconnecting them back to your Android phone.
 3. **Buried Audio Profile Switching**: Switching between High-Fidelity Stereo Music (`A2DP`) and Call + Microphone (`HFP/HSP`) normally requires digging through GNOME Sound Settings.
 
-| Behavior | Stock Ubuntu Bluetooth | `galaxy-buds-ubuntu` (v1.1.0) |
+| Behavior | Stock Ubuntu Bluetooth | `galaxy-buds-ubuntu` (v1.2.0) |
 | :--- | :---: | :---: |
+| **1-Click Install from GNOME Extensions Store** | `[ ]` N/A | `[x]` Official on [`extensions.gnome.org`](https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/) |
 | **Steal Audio from Android in 1 Click** | `[ ]` Often fails on LE Audio | `[x]` Connects `BR/EDR` UUIDs (`A2DP`, `AVRCP`, `HFP`) over D-Bus |
 | **Universal Samsung Galaxy Buds Support** | `[ ]` Generic Bluetooth menu | `[x]` Auto-detects model name (`Buds3 Pro`, `Buds2 Pro`, `Buds FE`, etc.) |
 | **Live Battery % in GNOME Quick Settings** | `[ ]` Hidden in settings | `[x]` Shows `Connected - 85%` right on the Quick Settings pill |
 | **1-Click Music (`A2DP`) vs Call (`HFP`) Toggle** | `[ ]` Buried in Sound Settings | `[x]` Built into Quick Settings menu + `buds-switch profile [a2dp\|hfp]` |
 | **Auto-Set PipeWire Default Output Sink** | `[ ]` Manual switch needed | `[x]` Automatically routes via `wpctl` |
 | **Push Audio Back to Android on Disconnect** | `[ ]` Leaves earbuds idle | `[x]` Triggers MacroDroid webhook for instant phone reconnect |
-| **Native GTK4 Settings & Setup Guide GUI** | `[ ]` Manual config files | `[x]` 3-tab Libadwaita app (`buds-settings`) with 1-click MAC detection & webhook test |
+| **Native GTK4 Settings & Setup Guide GUI** | `[ ]` Manual config files | `[x]` Libadwaita Preferences (`buds-settings`) with 1-click BlueZ scan |
 
 ---
 
@@ -82,18 +84,16 @@ All Samsung Galaxy Buds models implement the same Classic Bluetooth (`BR/EDR`) p
 ---
 
 <a id="settings-gui"></a>
-## 🖥️ Native GTK4 / Libadwaita Settings & Android Setup GUI (`buds-settings`)
+## 🖥️ Native GTK4 / Libadwaita Settings & Android Setup GUI (`prefs.js` / `buds-settings`)
 
-Run `buds-settings` from your terminal or click **"Settings & Android Setup Guide"** directly inside the GNOME Quick Settings dropdown menu to open the native 3-tab GTK4 / Libadwaita configuration window:
+Click **"Settings & Android Setup Guide"** inside the GNOME Quick Settings dropdown menu (or run `buds-settings` / `gnome-extensions prefs galaxy-buds-switcher@pulkitmundra.github.io`) to open the native GTK4 / Libadwaita `Adw.PreferencesWindow` backed by `GSettings` (`org.gnome.shell.extensions.galaxy-buds-switcher`):
 
 1. **Tab 1 - Configuration (`Configuration`):**
-   - **Auto-Detect Paired Buds**: 1-click scan of BlueZ (`org.bluez.Device1`) that automatically detects any paired Samsung Galaxy Buds model and populates `BUD_MAC`.
-   - **MacroDroid Webhook Configurator & Live Tester**: Save your `MACRODROID_WEBHOOK_BASE` URL (with automatic `0600` file permissions) and click **Test Webhook on Phone** to verify instant Android reconnection.
-   - **Live Controls**: Connect, disconnect, or switch between **High-Fidelity Music (`A2DP`)** and **Call + Mic (`HFP`)** directly from the GUI.
-2. **Tab 2 - Android Setup (`Android Setup`):**
-   - Interactive step-by-step guide for configuring the MacroDroid webhook on Android (`buds` trigger + 2-second retry action + Unrestricted battery setting) plus a 1-click copy helper for Ubuntu's `/etc/bluetooth/main.conf` (`AutoEnable=false`).
-3. **Tab 3 - Info & Support (`Info & Support`):**
-   - Real-time diagnostics (detected model name, BlueZ adapter path `/org/bluez/hciX/...`, connection & battery `%`, active PipeWire profile, webhook status, and `GalaxyBudsClient` installation state) + quick links to support the project.
+   - **Auto-Detect Paired Earbuds (`Scan BlueZ`)**: 1-click asynchronous scan of BlueZ (`org.bluez.Device1`) that automatically detects any paired Samsung Galaxy Buds model and saves its MAC address to `GSettings` (`bud-mac`). You can also leave MAC blank for automatic runtime discovery.
+   - **Android Auto-Reconnect Webhook (`MacroDroid`)**: Bind and save your `macrodroid-webhook` base URL directly in `GSettings` (and automatically sync to `~/.config/buds-switch.env` when launched via `buds-settings`).
+2. **Tab 2 - Android Setup & Project Links (`Android Setup`):**
+   - Step-by-step interactive guide explaining how passive `BR/EDR` audio pull and MacroDroid webhook push work (`buds` trigger + 2-second retry action + Unrestricted battery setting).
+   - Quick-launch buttons for the **Official GNOME Extensions Store Page**, **GitHub Repository**, and **Issue Tracker**.
 
 ---
 
@@ -125,9 +125,27 @@ sequenceDiagram
 ---
 
 <a id="quick-start"></a>
-## 🚀 Fresh System Setup (Ubuntu 24.04+)
+## 🚀 Quick Start (Ubuntu 24.04+ / GNOME 45 - 48)
 
-### 1. Install System Prerequisites
+### Option 1: Install from Official GNOME Extensions Store (Recommended)
+
+The GNOME Shell extension is 100% standalone (`Gio.DBus` + `GSettings` + `LibSoup` + `Adw.PreferencesWindow`) and can be installed in one click:
+
+1. **Via Web Browser:** Open [**Samsung Galaxy Buds Quick Settings Switcher on `extensions.gnome.org`**](https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/) and toggle the switch to **ON**.
+2. **Or via Extension Manager App:**
+   ```bash
+   sudo apt install -y gnome-shell-extension-manager
+   ```
+   Open **Extension Manager** -> **Browse** -> search for **`Samsung Galaxy Buds Quick Settings Switcher`** -> click **Install**.
+3. Open the top-right GNOME **Quick Settings** menu -> expand the **Galaxy Buds** arrow -> click **Settings & Android Setup Guide** -> click **Scan BlueZ** to auto-detect your paired earbuds (or leave MAC blank for automatic discovery).
+
+---
+
+### Option 2: Full Suite Installer (`buds-switch` CLI + `GalaxyBudsClient` + Extension)
+
+If you also want the `buds-switch` terminal CLI (for custom keyboard shortcuts like `Super + B`), `buds-settings` launcher, and automatic download of the portable `GalaxyBudsClient` manager:
+
+#### 1. Install System Prerequisites
 
 ```bash
 sudo apt update
@@ -157,7 +175,7 @@ bluetoothctl
 
 </details>
 
-### 2. Clone & Run the Automated Installer
+#### 2. Clone & Run the Automated Installer
 
 ```bash
 git clone https://github.com/pulkitmundra/galaxy-buds-ubuntu.git ~/Desktop/prsnl/galaxy-buds-ubuntu
@@ -166,7 +184,7 @@ chmod +x install.sh
 ./install.sh
 ```
 
-### 3. Configure via GUI (`buds-settings`) or `.env`
+#### 3. Configure via GUI (`buds-settings`) or `.env`
 
 Launch the native GTK4 Settings & Setup Guide GUI:
 
@@ -174,7 +192,7 @@ Launch the native GTK4 Settings & Setup Guide GUI:
 buds-settings
 ```
 
-Click **"Auto-Detect Paired Buds"**, paste your optional MacroDroid webhook URL, and click **"Save Configuration"** (or edit `.env` manually):
+Click **"Scan BlueZ"**, paste your optional MacroDroid webhook URL, and it saves directly to `GSettings` and `.env`:
 
 ```ini
 BUD_MAC="XX:XX:XX:XX:XX:XX"
@@ -184,7 +202,7 @@ MACRODROID_WEBHOOK_BASE="https://trigger.macrodroid.com/YOUR-UUID-HERE"
 <details>
 <summary><b>🔍 What <code>./install.sh</code> configures (Click to expand)</b></summary><br>
 
-1. Symlinks `.env` -> `~/.config/buds-switch.env` (`0600` owner-only permissions)
+1. Symlinks `.env` -> `~/.config/buds-switch.env` (`0600` owner-only permissions) and syncs with `GSettings` (`org.gnome.shell.extensions.galaxy-buds-switcher`)
 2. Symlinks `buds-switch` -> `~/.local/bin/buds-switch` and `buds-settings` -> `~/.local/bin/buds-settings`
 3. Symlinks `earbuds-symbolic.svg` -> `~/.local/share/icons/earbuds-symbolic.svg`
 4. Downloads the official portable **GalaxyBudsClient** binary to `~/.local/opt/galaxybudsclient/GalaxyBudsClient` (verified via SHA-256 checksum) and installs `~/.local/share/applications/galaxybudsclient.desktop`
@@ -240,16 +258,18 @@ To make your Android phone automatically grab the earbuds the instant you click 
 
 ```text
 galaxy-buds-ubuntu/
-├── buds-switch                 # CLI engine (connect | disconnect | toggle | profile | battery | settings | status)
-├── buds-settings               # Standalone launcher for the GTK4 / Libadwaita Settings & Setup Guide GUI
-├── budsSettingsWindow.js       # 3-tab GTK4 / Libadwaita PreferencesWindow (Configuration, Android Setup, Info & Support)
-├── budsQuickToggle.js          # GNOME Shell Quick Settings indicator, live battery %, A2DP/HFP & menu toggle
-├── extension.js                # Standalone GNOME Shell extension entrypoint
-├── prefs.js                    # GNOME Shell ExtensionPreferences entrypoint
+├── extension.js                # Standalone GNOME Shell 45-48 extension entrypoint
+├── budsQuickToggle.js          # Quick Settings indicator, async BlueZ D-Bus, live battery %, A2DP/HFP & menu toggle
+├── prefs.js                    # GTK4 / Libadwaita ExtensionPreferences window (Configuration & Android Setup)
 ├── metadata.json               # GNOME Extensions Store metadata (galaxy-buds-switcher@pulkitmundra.github.io)
-├── earbuds-symbolic.svg        # Symbolic icon for GNOME Shell & desktop notifications
+├── earbuds-symbolic.svg        # Bundled symbolic icon for GNOME Shell & notifications
+├── schemas/
+│   └── org.gnome.shell.extensions.galaxy-buds-switcher.gschema.xml # GSettings schema (bud-mac & macrodroid-webhook)
+├── buds-switch                 # CLI engine (connect | disconnect | toggle | profile | battery | settings | status)
+├── buds-settings               # CLI launcher for GNOME Extension Preferences with .env <-> GSettings sync
 ├── galaxybudsclient.desktop    # Desktop launcher template for GalaxyBudsClient GUI
 ├── install.sh                  # Automated setup & store bundle packaging script
+├── dist/                       # Built GNOME Extensions Store package (.shell-extension.zip)
 ├── CHANGELOG.md                # Release history
 ├── LICENSE                     # MIT License
 ├── .env.example                # Template for your Bluetooth MAC & MacroDroid webhook

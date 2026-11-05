@@ -2,6 +2,18 @@
 
 All notable changes to **Samsung Galaxy Buds - Ubuntu & Android Seamless Switcher** are documented in this file.
 
+## [v1.2.0] - 2026-11-05
+
+### Added
+- **Official Publication on GNOME Extensions Store (`extensions.gnome.org`):**
+  - Published and approved on the official GNOME Shell Extensions Store at [`https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/`](https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/) (`galaxy-buds-switcher@pulkitmundra.github.io`, `version: 4` for GNOME Shell `45 - 48`).
+  - Added 1-click installation support via `extensions.gnome.org` and the **Extension Manager** desktop app (`gnome-shell-extension-manager`).
+- **Native `GSettings` Schema & EGO Review Guidelines Compliance (`schemas/`, `budsQuickToggle.js`, `prefs.js`):**
+  - Migrated extension configuration (`bud-mac`, `macrodroid-webhook`) to a compiled `GSettings` schema (`org.gnome.shell.extensions.galaxy-buds-switcher`) with `Gio.SettingsBindFlags.DEFAULT` in `Adw.PreferencesWindow` (`prefs.js`).
+  - Added full `Gio.Cancellable` lifecycle management across all asynchronous `Gio.DBus` and `Soup.Session` operations so disabling the extension or closing preferences cancels in-flight calls cleanly.
+- **Bidirectional CLI <-> `GSettings` Sync (`buds-switch`, `buds-settings`, `install.sh`):**
+  - Updated `buds-switch` to read `GSettings` first (with automatic fallback to `~/.config/buds-switch.env`) and `buds-settings` to watch `GSettings` changes and live-sync them back to `.env`.
+
 ## [v1.1.0] - 2026-11-03
 
 ### Added

@@ -209,6 +209,12 @@ export default class BudsQuickTogglePreferences extends ExtensionPreferences {
         };
 
         addLinkRow(
+            'Official GNOME Extensions Store Page',
+            'https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/',
+            'Open Store Page',
+            'https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/'
+        );
+        addLinkRow(
             'GitHub Repository and Documentation',
             GITHUB_REPO_URL,
             'Open Repository',
