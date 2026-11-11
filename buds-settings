@@ -4,35 +4,155 @@ set -euo pipefail
 EXT_UUID="galaxy-buds-switcher@pulkitmundra.github.io"
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
-sync_gsettings_to_env() {
-  local mac=""
-  local hook=""
-  if command -v gsettings >/dev/null 2>&1 && [ -d "$SCRIPT_DIR/schemas" ]; then
-    mac="$(gsettings --schemadir "$SCRIPT_DIR/schemas" get org.gnome.shell.extensions.galaxy-buds-switcher bud-mac 2>/dev/null | sed -E "s/^'//; s/'$//" || true)"
-    hook="$(gsettings --schemadir "$SCRIPT_DIR/schemas" get org.gnome.shell.extensions.galaxy-buds-switcher macrodroid-webhook 2>/dev/null | sed -E "s/^'//; s/'$//" || true)"
-  elif command -v dconf >/dev/null 2>&1; then
-    mac="$(dconf read /org/gnome/shell/extensions/galaxy-buds-switcher/bud-mac 2>/dev/null | sed -E "s/^'//; s/'$//" || true)"
-    hook="$(dconf read /org/gnome/shell/extensions/galaxy-buds-switcher/macrodroid-webhook 2>/dev/null | sed -E "s/^'//; s/'$//" || true)"
+read_env_var() {
+  local target_key="$1"
+  local file="$2"
+  if [ -z "$file" ] || [ ! -f "$file" ]; then
+    return 0
   fi
-  hook="${hook%/}"
-  hook="${hook%/buds}"
+  local result=""
+  local line trimmed key val
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    trimmed="${line#"${line%%[![:space:]]*}"}"
+    if [ -z "$trimmed" ] || [[ "$trimmed" == \#* ]]; then
+      continue
+    fi
+    if [[ "$trimmed" == export[[:space:]]* ]]; then
+      trimmed="${trimmed#export}"
+      trimmed="${trimmed#"${trimmed%%[![:space:]]*}"}"
+    fi
+    if [[ "$trimmed" != *=* ]]; then
+      continue
+    fi
+    key="${trimmed%%=*}"
+    key="${key%"${key##*[![:space:]]}"}"
+    if [ "$key" != "$target_key" ]; then
+      continue
+    fi
+    val="${trimmed#*=}"
+    val="${val#"${val%%[![:space:]]*}"}"
+    if [[ "$val" == \"* ]]; then
+      val="${val#\"}"
+      if [[ "$val" =~ ^(([^\"\\]|\\.)*)\"[[:space:]]*(#.*)?$ ]]; then
+        val="${BASH_REMATCH[1]}"
+        val="${val//\\\"/\"}"
+        val="${val//\\\\/\\}"
+      else
+        val="${val%\"}"
+      fi
+    elif [[ "$val" == \'* ]]; then
+      val="${val#\'}"
+      if [[ "$val" =~ ^([^\']*)\'[[:space:]]*(#.*)?$ ]]; then
+        val="${BASH_REMATCH[1]}"
+      else
+        val="${val%\'}"
+      fi
+    else
+      val="${val%%#*}"
+      val="${val%"${val##*[![:space:]]}"}"
+    fi
+    result="$val"
+  done < "$file"
+  printf '%s' "$result"
+}
+
+read_gsetting() {
+  local key="$1"
+  local raw=""
+  if command -v gsettings >/dev/null 2>&1 && [ -d "$SCRIPT_DIR/schemas" ]; then
+    raw="$(gsettings --schemadir "$SCRIPT_DIR/schemas" get org.gnome.shell.extensions.galaxy-buds-switcher "$key" 2>/dev/null || true)"
+  elif command -v dconf >/dev/null 2>&1; then
+    raw="$(dconf read "/org/gnome/shell/extensions/galaxy-buds-switcher/$key" 2>/dev/null || true)"
+  fi
+  if [[ "$raw" == \'*\' ]]; then
+    raw="${raw#\'}"
+    raw="${raw%\'}"
+  elif [[ "$raw" == \"*\" ]]; then
+    raw="${raw#\"}"
+    raw="${raw%\"}"
+  fi
+  printf '%s' "$raw"
+}
+
+sanitize_env_value() {
+  local val="${1:-}"
+  val="${val//[$'\r\n\047']/}"
+  printf '%s' "$val"
+}
+
+seed_empty_gsettings_from_env() {
+  if [ ! -f "$SCRIPT_DIR/.env" ] || ! command -v gsettings >/dev/null 2>&1 || [ ! -d "$SCRIPT_DIR/schemas" ]; then
+    return 0
+  fi
+  local g_mac g_hook env_mac env_hook
+  g_mac="$(read_gsetting "bud-mac")"
+  g_hook="$(read_gsetting "macrodroid-webhook")"
+  env_mac="$(read_env_var "BUD_MAC" "$SCRIPT_DIR/.env")"
+  env_hook="$(read_env_var "MACRODROID_WEBHOOK_BASE" "$SCRIPT_DIR/.env")"
+
+  if [ -z "$g_mac" ] && [ -n "$env_mac" ] && [ "${env_mac^^}" != "AA:BB:CC:DD:EE:FF" ]; then
+    GSETTINGS_SCHEMA_DIR="$SCRIPT_DIR/schemas" gsettings set org.gnome.shell.extensions.galaxy-buds-switcher bud-mac "$env_mac" 2>/dev/null || true
+  fi
+  if [ -z "$g_hook" ] && [ -n "$env_hook" ] && [[ "${env_hook^^}" != *YOUR-UUID* ]]; then
+    GSETTINGS_SCHEMA_DIR="$SCRIPT_DIR/schemas" gsettings set org.gnome.shell.extensions.galaxy-buds-switcher macrodroid-webhook "$env_hook" 2>/dev/null || true
+  fi
+}
+
+sync_gsettings_to_env() {
+  local g_mac g_hook env_mac env_hook final_mac final_hook
+  g_mac="$(read_gsetting "bud-mac")"
+  g_hook="$(read_gsetting "macrodroid-webhook")"
+
+  if [ "${g_mac^^}" = "AA:BB:CC:DD:EE:FF" ]; then
+    g_mac=""
+  fi
+  if [[ "${g_hook^^}" == *YOUR-UUID* ]]; then
+    g_hook=""
+  fi
+
+  # Do not clobber .env when GSettings keys are empty (e.g. async gnome-extensions prefs activation)
+  if [ -z "$g_mac" ] && [ -z "$g_hook" ]; then
+    return 0
+  fi
+
+  env_mac="$(read_env_var "BUD_MAC" "$SCRIPT_DIR/.env")"
+  env_hook="$(read_env_var "MACRODROID_WEBHOOK_BASE" "$SCRIPT_DIR/.env")"
+  if [ "${env_mac^^}" = "AA:BB:CC:DD:EE:FF" ]; then
+    env_mac=""
+  fi
+  if [[ "${env_hook^^}" == *YOUR-UUID* ]]; then
+    env_hook=""
+  fi
+
+  final_mac="$(sanitize_env_value "${g_mac:-$env_mac}")"
+  final_hook="$(sanitize_env_value "${g_hook:-$env_hook}")"
 
   mkdir -p "$HOME/.config"
-  cat > "$SCRIPT_DIR/.env" <<ENVEOF
-# Galaxy Buds3 Pro Bluetooth MAC Address (check via \`bluetoothctl devices\`)
-BUD_MAC="${mac}"
+  (
+    umask 077
+    printf '%s\n' \
+      "# Samsung Galaxy Buds Bluetooth MAC Address (check via bluetoothctl devices)" \
+      "BUD_MAC='${final_mac}'" \
+      "" \
+      "# MacroDroid Webhook Base URL (without trailing /buds)" \
+      "MACRODROID_WEBHOOK_BASE='${final_hook}'" \
+      > "$SCRIPT_DIR/.env"
+  )
+  chmod 600 "$SCRIPT_DIR/.env"
 
-# MacroDroid Webhook Base URL (without trailing /buds)
-MACRODROID_WEBHOOK_BASE="${hook}"
-ENVEOF
-  chmod 600 "$SCRIPT_DIR/.env" 2>/dev/null || true
   if [ ! -e "$HOME/.config/buds-switch.env" ]; then
     ln -sf "$SCRIPT_DIR/.env" "$HOME/.config/buds-switch.env"
   elif [ "$(readlink -f "$HOME/.config/buds-switch.env")" != "$(readlink -f "$SCRIPT_DIR/.env")" ]; then
-    cp -f "$SCRIPT_DIR/.env" "$HOME/.config/buds-switch.env"
-    chmod 600 "$HOME/.config/buds-switch.env" 2>/dev/null || true
+    (
+      umask 077
+      cp -f "$SCRIPT_DIR/.env" "$HOME/.config/buds-switch.env"
+    )
+    chmod 600 "$HOME/.config/buds-switch.env"
   fi
 }
+
+seed_empty_gsettings_from_env
 
 if gnome-extensions info "$EXT_UUID" >/dev/null 2>&1; then
   gnome-extensions prefs "$EXT_UUID" "$@"
@@ -40,15 +160,41 @@ if gnome-extensions info "$EXT_UUID" >/dev/null 2>&1; then
   exit 0
 fi
 
-TMP_RUNNER="$(mktemp --suffix=.js)"
+TMP_RUNNER="$(umask 077 && mktemp --suffix=.js)"
 trap 'rm -f "$TMP_RUNNER"; sync_gsettings_to_env' EXIT
 
-sed "s|import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';|class ExtensionPreferences { getSettings() { const src = Gio.SettingsSchemaSource.new_from_directory('${SCRIPT_DIR}/schemas', Gio.SettingsSchemaSource.get_default(), false); return new Gio.Settings({ settings_schema: src.lookup('org.gnome.shell.extensions.galaxy-buds-switcher', true) }); } }|" \
-  "$SCRIPT_DIR/prefs.js" > "$TMP_RUNNER"
+PREFS_SRC="$SCRIPT_DIR/prefs.js" TMP_RUNNER="$TMP_RUNNER" python3 - <<'PYEOF'
+import os
+import pathlib
 
-cat >> "$TMP_RUNNER" <<EOF
+src = pathlib.Path(os.environ["PREFS_SRC"]).read_text(encoding="utf-8")
+shim = (
+    "class ExtensionPreferences {\n"
+    "    getSettings() {\n"
+    "        const repoDir = GLib.getenv('BUDS_REPO_DIR');\n"
+    "        const schemaSrc = Gio.SettingsSchemaSource.new_from_directory(\n"
+    "            `${repoDir}/schemas`,\n"
+    "            Gio.SettingsSchemaSource.get_default(),\n"
+    "            false\n"
+    "        );\n"
+    "        return new Gio.Settings({\n"
+    "            settings_schema: schemaSrc.lookup('org.gnome.shell.extensions.galaxy-buds-switcher', true),\n"
+    "        });\n"
+    "    }\n"
+    "}"
+)
+target = "import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';"
+if target not in src:
+    raise SystemExit("Expected ExtensionPreferences import not found in prefs.js")
+pathlib.Path(os.environ["TMP_RUNNER"]).write_text(src.replace(target, shim, 1), encoding="utf-8")
+PYEOF
+
+cat >> "$TMP_RUNNER" <<'EOF'
 
 Adw.init();
+const repoDir = GLib.getenv('BUDS_REPO_DIR');
+const sanitizeEnvVal = val => String(val || '').replace(/[\r\n']/g, '').trim();
+
 const app = new Adw.Application({
     application_id: 'io.github.pulkitmundra.GalaxyBudsSwitcher.Settings',
     flags: Gio.ApplicationFlags.NON_UNIQUE,
@@ -58,23 +204,28 @@ app.connect('activate', application => {
     const prefs = new BudsQuickTogglePreferences();
     const settings = prefs.getSettings();
     const syncEnv = () => {
+        if (!repoDir)
+            return;
         try {
-            const mac = settings.get_string('bud-mac').trim();
-            const hook = settings.get_string('macrodroid-webhook').trim().replace(/\\/+$/, '').replace(/\\/buds$/i, '');
+            const rawMac = sanitizeEnvVal(settings.get_string('bud-mac'));
+            const rawHook = sanitizeEnvVal(settings.get_string('macrodroid-webhook'));
+            const mac = rawMac.toUpperCase() === 'AA:BB:CC:DD:EE:FF' ? '' : rawMac;
+            const hook = /YOUR-UUID/i.test(rawHook) ? '' : rawHook;
+            const envPath = `${repoDir}/.env`;
             const content =
-                '# Galaxy Buds3 Pro Bluetooth MAC Address (check via bluetoothctl devices)\\n' +
-                'BUD_MAC="' + mac + '"\\n\\n' +
-                '# MacroDroid Webhook Base URL (without trailing /buds)\\n' +
-                'MACRODROID_WEBHOOK_BASE="' + hook + '"\\n';
-            GLib.file_set_contents('${SCRIPT_DIR}/.env', content);
+                '# Samsung Galaxy Buds Bluetooth MAC Address (check via bluetoothctl devices)\n' +
+                `BUD_MAC='${mac}'\n\n` +
+                '# MacroDroid Webhook Base URL (without trailing /buds)\n' +
+                `MACRODROID_WEBHOOK_BASE='${hook}'\n`;
+            GLib.file_set_contents(envPath, content);
+            GLib.chmod(envPath, 0o600);
         } catch (_e) {}
     };
     settings.connect('changed', syncEnv);
-    syncEnv();
     prefs.fillPreferencesWindow(win);
     win.present();
 });
 app.run([]);
 EOF
 
-GSETTINGS_SCHEMA_DIR="$SCRIPT_DIR/schemas" gjs -m "$TMP_RUNNER" "$@"
+BUDS_REPO_DIR="$SCRIPT_DIR" GSETTINGS_SCHEMA_DIR="$SCRIPT_DIR/schemas" gjs -m "$TMP_RUNNER" "$@"

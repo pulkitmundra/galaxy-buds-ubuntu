@@ -1,5 +1,5 @@
 ```bash
-$ buds-switch toggle
+$ buds toggle          # shorthand alias for: buds-switch toggle
 $ buds-settings
 ```
 
@@ -22,7 +22,7 @@ $ buds-settings
 
 <p align="center">
   <a href="https://github.com/pulkitmundra/galaxy-buds-ubuntu/stargazers"><img src="https://img.shields.io/github/stars/pulkitmundra/galaxy-buds-ubuntu?style=social" alt="GitHub Stars" /></a>&nbsp;
-  <a href="https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/"><img src="https://img.shields.io/badge/GNOME_Extensions-v1.2.0_(Approved)-4A86CF?style=flat&logo=gnome&logoColor=white" alt="GNOME Extensions Store" /></a>&nbsp;
+  <a href="https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/"><img src="https://img.shields.io/badge/GNOME_Extensions-v1.2.1_(Approved)-4A86CF?style=flat&logo=gnome&logoColor=white" alt="GNOME Extensions Store" /></a>&nbsp;
   <a href="https://github.com/pulkitmundra/galaxy-buds-ubuntu/releases"><img src="https://img.shields.io/github/v/release/pulkitmundra/galaxy-buds-ubuntu?color=38bdf8&label=Release" alt="Latest Release" /></a>&nbsp;
   <a href="https://github.com/pulkitmundra"><img src="https://img.shields.io/badge/Author-%40pulkitmundra-181717?style=flat&logo=github" alt="Author" /></a>&nbsp;
   <a href="https://pulkit-mundra-portfolio.vercel.app"><img src="https://img.shields.io/badge/Portfolio-pulkit--mundra-2563EB?style=flat&logo=vercel" alt="Portfolio" /></a>&nbsp;
@@ -52,7 +52,7 @@ Samsung Galaxy Buds only support *Samsung Seamless Switch* between Samsung OneUI
 2. **Dead Air on Disconnect**: Disconnecting the earbuds from Ubuntu leaves them idle instead of reconnecting them back to your Android phone.
 3. **Buried Audio Profile Switching**: Switching between High-Fidelity Stereo Music (`A2DP`) and Call + Microphone (`HFP/HSP`) normally requires digging through GNOME Sound Settings.
 
-| Behavior | Stock Ubuntu Bluetooth | `galaxy-buds-ubuntu` (v1.2.0) |
+| Behavior | Stock Ubuntu Bluetooth | `galaxy-buds-ubuntu` (v1.2.1) |
 | :--- | :---: | :---: |
 | **1-Click Install from GNOME Extensions Store** | `[ ]` N/A | `[x]` Official on [`extensions.gnome.org`](https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/) |
 | **Steal Audio from Android in 1 Click** | `[ ]` Often fails on LE Audio | `[x]` Connects `BR/EDR` UUIDs (`A2DP`, `AVRCP`, `HFP`) over D-Bus |
@@ -178,8 +178,8 @@ bluetoothctl
 #### 2. Clone & Run the Automated Installer
 
 ```bash
-git clone https://github.com/pulkitmundra/galaxy-buds-ubuntu.git ~/Desktop/prsnl/galaxy-buds-ubuntu
-cd ~/Desktop/prsnl/galaxy-buds-ubuntu
+git clone https://github.com/pulkitmundra/galaxy-buds-ubuntu.git ~/galaxy-buds-ubuntu
+cd ~/galaxy-buds-ubuntu
 chmod +x install.sh
 ./install.sh
 ```
@@ -196,14 +196,14 @@ Click **"Scan BlueZ"**, paste your optional MacroDroid webhook URL, and it saves
 
 ```ini
 BUD_MAC="XX:XX:XX:XX:XX:XX"
-MACRODROID_WEBHOOK_BASE="https://trigger.macrodroid.com/YOUR-UUID-HERE"
+MACRODROID_WEBHOOK_BASE="https://trigger.macrodroid.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 ```
 
 <details>
 <summary><b>🔍 What <code>./install.sh</code> configures (Click to expand)</b></summary><br>
 
-1. Symlinks `.env` -> `~/.config/buds-switch.env` (`0600` owner-only permissions) and syncs with `GSettings` (`org.gnome.shell.extensions.galaxy-buds-switcher`)
-2. Symlinks `buds-switch` -> `~/.local/bin/buds-switch` and `buds-settings` -> `~/.local/bin/buds-settings`
+1. Symlinks `.env` -> `~/.config/buds-switch.env` (`0600` owner-only permissions) and seeds `GSettings` (`org.gnome.shell.extensions.galaxy-buds-switcher`) only when the corresponding `GSettings` key is currently empty
+2. Symlinks `buds-switch` -> `~/.local/bin/buds` and `~/.local/bin/buds-switch`, plus `buds-settings` -> `~/.local/bin/buds-settings`
 3. Symlinks `earbuds-symbolic.svg` -> `~/.local/share/icons/earbuds-symbolic.svg`
 4. Downloads the official portable **GalaxyBudsClient** binary to `~/.local/opt/galaxybudsclient/GalaxyBudsClient` (verified via SHA-256 checksum) and installs `~/.local/share/applications/galaxybudsclient.desktop`
 5. Installs and enables the GNOME Shell Quick Settings extension (`galaxy-buds-switcher@pulkitmundra.github.io`) and builds the distributable store package in `dist/galaxy-buds-switcher@pulkitmundra.github.io.shell-extension.zip`.
@@ -235,21 +235,33 @@ To make your Android phone automatically grab the earbuds the instant you click 
 ---
 
 <a id="cli-usage"></a>
-## 💻 CLI & Keyboard Shortcuts
+## 💻 CLI, Keyboard Shortcuts & Uninstalling
 
-| Command | Description |
+Both `buds` and `buds-switch` point to the same CLI executable:
+
+| Command (`buds` or `buds-switch`) | Description |
 | :--- | :--- |
-| `buds-switch toggle` | Toggle connection between Ubuntu and Android |
-| `buds-switch connect` | Pull earbuds from Android to Ubuntu (`A2DP` + `AVRCP` + `HFP`) and set default PipeWire sink |
-| `buds-switch disconnect` | Disconnect from Ubuntu and trigger Android MacroDroid webhook |
-| `buds-switch profile a2dp` | Switch Ubuntu audio mode to **High-Fidelity Music (`A2DP Sink`)** |
-| `buds-switch profile hfp` | Switch Ubuntu audio mode to **Call + Microphone (`HFP/HSP`)** |
-| `buds-switch battery` | Print current earbuds battery percentage (e.g. `85%`) |
-| `buds-switch settings` | Open the GTK4 / Libadwaita Settings & Android Setup Guide GUI (`buds-settings`) |
-| `buds-switch status` | Prints `connected` or `disconnected` |
+| `buds toggle` / `buds-switch toggle` | Toggle connection between Ubuntu and Android |
+| `buds connect` / `buds-switch connect` | Pull earbuds from Android to Ubuntu (`A2DP` + `AVRCP` + `HFP`) and set default PipeWire sink |
+| `buds disconnect` / `buds-switch disconnect` | Disconnect from Ubuntu and trigger Android MacroDroid HTTP webhook |
+| `buds profile a2dp` / `buds-switch profile a2dp` | Switch Ubuntu audio mode to **High-Fidelity Music (`A2DP Sink`)** |
+| `buds profile hfp` / `buds-switch profile hfp` | Switch Ubuntu audio mode to **Call + Microphone (`HFP/HSP`)** |
+| `buds battery` / `buds-switch battery` | Print current earbuds battery percentage (e.g. `85%`) |
+| `buds settings` / `buds-switch settings` | Open the GTK4 / Libadwaita Settings & Android Setup Guide GUI (`buds-settings`) |
+| `buds status` / `buds-switch status` | Prints `connected` or `disconnected` |
 
 > [!TIP]
-> You can bind `buds-switch toggle` to a global hotkey (e.g., `Super + B`) in **Ubuntu Settings -> Keyboard -> Custom Shortcuts** for instant keyboard switching!
+> You can bind `buds toggle` (or `buds-switch toggle`) to a global hotkey (e.g., `Super + B`) in **Ubuntu Settings -> Keyboard -> Custom Shortcuts** for instant keyboard switching!
+
+### Uninstalling
+
+```bash
+# Remove CLI/GUI symlinks, desktop/icon links, and local extension symlinks (preserves your .env)
+./uninstall.sh
+
+# Full cleanup: also remove .env, ~/.config/buds-switch.env, GSettings keys, and GalaxyBudsClient
+./uninstall.sh --purge
+```
 
 ---
 
@@ -265,10 +277,12 @@ galaxy-buds-ubuntu/
 ├── earbuds-symbolic.svg        # Bundled symbolic icon for GNOME Shell & notifications
 ├── schemas/
 │   └── org.gnome.shell.extensions.galaxy-buds-switcher.gschema.xml # GSettings schema (bud-mac & macrodroid-webhook)
-├── buds-switch                 # CLI engine (connect | disconnect | toggle | profile | battery | settings | status)
-├── buds-settings               # CLI launcher for GNOME Extension Preferences with .env <-> GSettings sync
+├── buds-switch                 # CLI engine (installed as both `buds` and `buds-switch`)
+├── buds-settings               # CLI launcher for GNOME Extension Preferences with safe .env <-> GSettings sync
 ├── galaxybudsclient.desktop    # Desktop launcher template for GalaxyBudsClient GUI
 ├── install.sh                  # Automated setup & store bundle packaging script
+├── uninstall.sh                # Safe uninstaller (preserves .env unless --purge is passed)
+├── .github/workflows/ci.yml    # GitHub Actions CI for shell scripts, GSettings schema & metadata validation
 ├── dist/                       # Built GNOME Extensions Store package (.shell-extension.zip)
 ├── CHANGELOG.md                # Release history
 ├── LICENSE                     # MIT License
@@ -284,10 +298,10 @@ galaxy-buds-ubuntu/
 ## ❓ Frequently Asked Questions (Samsung Galaxy Buds on Ubuntu & Linux)
 
 ### How do I get Multipoint Bluetooth switching for Samsung Galaxy Buds3 Pro, Buds2 Pro, or Buds FE on Ubuntu/Linux?
-Samsung Galaxy Buds only support "Seamless Earbud Connection" inside Samsung's proprietary One UI ecosystem, not standard Bluetooth Multipoint with Linux PCs. **Galaxy Buds Ubuntu Switcher** bridges that gap on GNOME 45-48 by exploiting Galaxy Buds' passive Bluetooth takeover behavior (`bluez` + `PipeWire`) together with an optional lightweight Android MacroDroid UDP/Webhook bridge, giving you one-click switching in the GNOME top-right Quick Settings menu and automatic handoff when your Android phone rings.
+Samsung Galaxy Buds only support "Seamless Earbud Connection" inside Samsung's proprietary One UI ecosystem, not standard Bluetooth Multipoint with Linux PCs. **Galaxy Buds Ubuntu Switcher** bridges that gap on GNOME 45-48 by connecting Classic Bluetooth (`BR/EDR`) audio profiles directly over BlueZ D-Bus and PipeWire to pull audio to Ubuntu in one click, paired with an optional Android MacroDroid HTTP webhook handoff that tells your phone to immediately reclaim the earbuds whenever you disconnect on Ubuntu.
 
 ### How do I check Samsung Galaxy Buds battery percentage and switch between A2DP and HFP on Ubuntu?
-Once installed (`./install.sh`), the GNOME Quick Settings pill displays live earbuds battery percentage (`UPower` / `BlueZ Battery1`) and expands into a submenu to switch between **High-Fidelity Music (`A2DP Sink`)** and **Call + Microphone (`HFP/HSP`)** with a single click or via `buds-switch profile a2dp|hfp`.
+Once installed (from `extensions.gnome.org` or via `./install.sh`), the GNOME Quick Settings pill subscribes directly to BlueZ's `org.bluez.Battery1` D-Bus interface to display live earbuds battery percentage (`buds battery` / `buds-switch battery` on the CLI queries `org.bluez.Battery1` first with an automatic `UPower` fallback), and expands into a submenu to switch between **High-Fidelity Music (`A2DP Sink`)** and **Call + Microphone (`HFP/HSP`)** in a single click or via `buds profile a2dp|hfp`.
 
 ---
 

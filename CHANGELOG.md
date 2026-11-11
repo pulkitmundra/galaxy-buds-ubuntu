@@ -2,6 +2,12 @@
 
 All notable changes to **Samsung Galaxy Buds - Ubuntu & Android Seamless Switcher** are documented in this file.
 
+## [v1.2.1] - 2026-11-11
+
+### Fixed
+- **GNOME Shell Lifecycle & PipeWire Sink Routing (`budsQuickToggle.js`, `prefs.js`):** Guarded post-`destroy()` async D-Bus callbacks when locking the screen mid-action, awaited PipeWire profile switches via `Promise`, automatically routed default output sink via `wpctl set-default` on Quick Settings connect, and retained `window._settings` in GTK4 preferences.
+- **Hardened `.env` Parsing, Webhook Filtering & Device Alias Support (`install.sh`, `buds-switch`, `buds-settings`):** Replaced `source .env` with a safe parser, blocked placeholder `YOUR-UUID-HERE` outbound calls, preserved query strings in webhook URLs, supported apostrophes (`Pulkit's Buds3 Pro`) and `Galaxy Buds+`, and added the `buds` CLI alias plus `uninstall.sh` and CI validation.
+
 ## [v1.2.0] - 2026-11-05
 
 ### Added

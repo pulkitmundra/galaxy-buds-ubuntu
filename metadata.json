@@ -3,6 +3,7 @@
   "name": "Samsung Galaxy Buds Quick Settings Switcher",
   "description": "One-click Ubuntu / Android switcher, live battery indicator, A2DP/HFP audio profile toggle, and MacroDroid webhook handoff for Samsung Galaxy Buds in GNOME Quick Settings.",
   "shell-version": ["45", "46", "47", "48"],
+  "version-name": "1.2.1",
   "settings-schema": "org.gnome.shell.extensions.galaxy-buds-switcher",
   "url": "https://github.com/pulkitmundra/galaxy-buds-ubuntu",
   "donations": {

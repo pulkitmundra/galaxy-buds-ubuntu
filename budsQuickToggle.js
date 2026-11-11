@@ -110,6 +110,77 @@ function dbusCallAsync(bus, busName, objectPath, ifaceName, methodName, params, 
     });
 }
 
+function execCommunicateAsync(argv, cancellable) {
+    if (!cancellable || cancellable.is_cancelled())
+        return Promise.resolve(null);
+
+    return new Promise(resolve => {
+        let proc;
+        try {
+            proc = Gio.Subprocess.new(
+                argv,
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE
+            );
+        } catch (_e) {
+            resolve(null);
+            return;
+        }
+
+        const cancelId = cancellable.connect(() => {
+            try {
+                proc.force_exit();
+            } catch (_e) {
+            }
+        });
+
+        proc.communicate_utf8_async(null, cancellable, (source, res) => {
+            if (cancelId && !cancellable.is_cancelled())
+                cancellable.disconnect(cancelId);
+            try {
+                const [ok, stdout] = source.communicate_utf8_finish(res);
+                resolve(ok && source.get_successful() ? stdout : null);
+            } catch (_e) {
+                resolve(null);
+            }
+        });
+    });
+}
+
+function execCheckAsync(argv, cancellable) {
+    if (!cancellable || cancellable.is_cancelled())
+        return Promise.resolve(false);
+
+    return new Promise(resolve => {
+        let proc;
+        try {
+            proc = Gio.Subprocess.new(
+                argv,
+                Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE
+            );
+        } catch (_e) {
+            resolve(false);
+            return;
+        }
+
+        const cancelId = cancellable.connect(() => {
+            try {
+                proc.force_exit();
+            } catch (_e) {
+            }
+        });
+
+        proc.wait_check_async(cancellable, (source, res) => {
+            if (cancelId && !cancellable.is_cancelled())
+                cancellable.disconnect(cancelId);
+            try {
+                resolve(source.wait_check_finish(res));
+            } catch (_e) {
+                resolve(false);
+            }
+        });
+    });
+}
+
 const BudsMenuToggle = GObject.registerClass(
 class BudsMenuToggle extends QuickSettings.QuickMenuToggle {
     _init(gicon, onAction, onOpenPreferences) {
@@ -172,6 +243,8 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
     _init(extension) {
         super._init();
 
+        this._destroyed = false;
+        this._pendingTimeouts = new Set();
         this._extension = extension;
         this._settings = extension.getSettings();
         this._cancellable = new Gio.Cancellable();
@@ -188,7 +261,7 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
         this._toggle = new BudsMenuToggle(
             this._gicon,
             action => this._executeAction(action),
-            () => this._extension.openPreferences()
+            () => this._extension?.openPreferences()
         );
         this.quickSettingsItems.push(this._toggle);
 
@@ -205,6 +278,8 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
             null,
             Gio.DBusSignalFlags.NONE,
             (_conn, _sender, objectPath, _iface, _signalName, params) => {
+                if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+                    return;
                 if (!objectPath || !objectPath.includes('/dev_'))
                     return;
                 const [ifaceName] = params.deep_unpack();
@@ -216,7 +291,49 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
         this._refreshState();
     }
 
+    _waitMs(ms) {
+        if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+            return Promise.resolve(false);
+
+        const cancellable = this._cancellable;
+        return new Promise(resolve => {
+            let timeoutId = null;
+            let cancelId = 0;
+
+            const finish = ok => {
+                if (timeoutId !== null) {
+                    this._pendingTimeouts?.delete(timeoutId);
+                    timeoutId = null;
+                }
+                if (cancelId && !cancellable.is_cancelled()) {
+                    cancellable.disconnect(cancelId);
+                    cancelId = 0;
+                }
+                resolve(ok);
+            };
+
+            timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+                timeoutId = null;
+                finish(!this._destroyed && Boolean(this._cancellable) && !this._cancellable.is_cancelled());
+                return GLib.SOURCE_REMOVE;
+            });
+            this._pendingTimeouts.add(timeoutId);
+
+            cancelId = cancellable.connect(() => {
+                if (timeoutId !== null) {
+                    GLib.Source.remove(timeoutId);
+                    this._pendingTimeouts?.delete(timeoutId);
+                    timeoutId = null;
+                }
+                cancelId = 0;
+                finish(false);
+            });
+        });
+    }
+
     _getConfiguredMacUnderscore() {
+        if (this._destroyed || !this._settings)
+            return null;
         const rawMac = this._settings.get_string('bud-mac').trim().toUpperCase();
         if (/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(rawMac) && rawMac !== 'AA:BB:CC:DD:EE:FF')
             return rawMac.replace(/:/g, '_');
@@ -224,14 +341,45 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
     }
 
     _getWebhookBase() {
-        return this._settings
-            .get_string('macrodroid-webhook')
-            .trim()
-            .replace(/\/+$/, '')
-            .replace(/\/buds$/i, '');
+        if (this._destroyed || !this._settings)
+            return null;
+
+        const raw = this._settings.get_string('macrodroid-webhook').trim();
+        if (!raw || /YOUR-UUID/i.test(raw))
+            return null;
+
+        try {
+            const uri = GLib.Uri.parse(raw, GLib.UriFlags.NONE);
+            const scheme = uri.get_scheme()?.toLowerCase();
+            const host = uri.get_host();
+            if ((scheme !== 'http' && scheme !== 'https') || !host)
+                return null;
+
+            const cleanPath = (uri.get_path() || '').replace(/\/+$/, '');
+            const segments = cleanPath.split('/').filter(Boolean);
+            const targetPath = segments.length === 1
+                ? `/${segments[0]}/buds`
+                : (cleanPath || '/buds');
+
+            return GLib.Uri.build(
+                GLib.UriFlags.NONE,
+                scheme,
+                uri.get_userinfo(),
+                host,
+                uri.get_port(),
+                targetPath,
+                uri.get_query(),
+                null
+            ).to_string();
+        } catch (_e) {
+            return null;
+        }
     }
 
     _discoverBuds(callback) {
+        if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+            return;
+
         const configuredMacU = this._getConfiguredMacUnderscore();
         Gio.DBus.system.call(
             'org.bluez',
@@ -246,9 +394,13 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
             (conn, res) => {
                 try {
                     const reply = conn.call_finish(res);
+                    if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+                        return;
                     const [objects] = reply.deep_unpack();
                     callback(parseBlueZManagedObjects(objects, configuredMacU));
                 } catch (e) {
+                    if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+                        return;
                     if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                         return;
                     const macU = configuredMacU || '00_00_00_00_00_00';
@@ -267,9 +419,15 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
     }
 
     _refreshState() {
+        if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+            return;
+
         this._discoverBuds(info => {
-            if (!this._toggle)
+            if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
                 return;
+            if (!this._toggle || !this._indicator)
+                return;
+
             const {fullTitle, pillTitle} = formatModelTitles(info.alias);
 
             this._toggle.checked = info.connected;
@@ -284,20 +442,28 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
     }
 
     _onToggleClicked() {
-        if (this._isBusy)
+        if (this._destroyed || this._isBusy || !this._toggle)
             return;
         this._isBusy = true;
 
         this._toggle.subtitle = this._toggle.checked ? 'Disconnecting...' : 'Connecting...';
         this._executeAction('toggle', () => {
             this._isBusy = false;
-            this._refreshState();
         });
     }
 
     _executeAction(action, doneCallback = null) {
+        if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled()) {
+            if (doneCallback)
+                doneCallback();
+            return;
+        }
+
         this._discoverBuds(async info => {
             try {
+                if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+                    return;
+
                 if (action === 'connect') {
                     await this._connectBuds(info);
                 } else if (action === 'disconnect') {
@@ -308,20 +474,25 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
                     else
                         await this._connectBuds(info);
                 } else if (action === 'profile-a2dp') {
-                    this._switchPipeWireProfile(info, 'a2dp');
+                    await this._switchPipeWireProfile(info, 'a2dp');
                 } else if (action === 'profile-hfp') {
-                    this._switchPipeWireProfile(info, 'hfp');
+                    await this._switchPipeWireProfile(info, 'hfp');
                 }
             } finally {
-                if (this._toggle)
-                    this._refreshState();
                 if (doneCallback)
                     doneCallback();
+                if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+                    return;
+                if (this._toggle)
+                    this._refreshState();
             }
         });
     }
 
     async _connectBuds(info) {
+        if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+            return;
+
         try {
             await dbusCallAsync(
                 Gio.DBus.system,
@@ -344,6 +515,8 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
 
         let connectedA2dp = false;
         for (const uuid of [A2DP_UUID, AVRCP_UUID, HFP_UUID]) {
+            if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+                return;
             try {
                 await dbusCallAsync(
                     Gio.DBus.system,
@@ -363,6 +536,9 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
             }
         }
 
+        if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+            return;
+
         if (!connectedA2dp) {
             try {
                 await dbusCallAsync(
@@ -375,12 +551,22 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
                     this._cancellable,
                     6000
                 );
-            } catch (_e) {
+            } catch (e) {
+                if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                    return;
             }
         }
+
+        if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+            return;
+
+        await this._routeDefaultPipeWireSink(info);
     }
 
     async _disconnectBuds(info) {
+        if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+            return;
+
         try {
             await dbusCallAsync(
                 Gio.DBus.system,
@@ -397,9 +583,12 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
                 return;
         }
 
-        const webhookBase = this._getWebhookBase();
-        if (webhookBase && /^https?:\/\/[A-Za-z0-9._:/-]+$/.test(webhookBase) && this._httpSession) {
-            const msg = Soup.Message.new('GET', `${webhookBase}/buds`);
+        if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+            return;
+
+        const webhookUrl = this._getWebhookBase();
+        if (webhookUrl && this._httpSession) {
+            const msg = Soup.Message.new('GET', webhookUrl);
             if (msg) {
                 this._httpSession.send_and_read_async(
                     msg,
@@ -416,59 +605,128 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
         }
     }
 
-    _switchPipeWireProfile(info, mode) {
+    _findPipeWireSinkId(stdout, info) {
+        try {
+            const data = JSON.parse(stdout);
+            const macU = String(info.macUnderscore || '').toUpperCase();
+            const macColon = macU.replace(/_/g, ':');
+            const hasValidMac = Boolean(macU && macU !== '00_00_00_00_00_00');
+            const aliasUpper = String(info.alias || '').toUpperCase();
+            let fallbackId = null;
+
+            for (const obj of data) {
+                if (obj.type !== 'PipeWire:Interface:Node')
+                    continue;
+                const props = obj.info?.props;
+                if (!props || props['media.class'] !== 'Audio/Sink')
+                    continue;
+
+                const nodeName = String(props['node.name'] || '').toUpperCase();
+                const bluezAddr = String(props['api.bluez5.address'] || '').toUpperCase();
+                const nodeDesc = String(props['node.description'] || '').toUpperCase();
+
+                if (hasValidMac &&
+                    (nodeName.includes(macU) || nodeName.includes(macColon) || bluezAddr === macColon))
+                    return String(obj.id);
+
+                if (!fallbackId && nodeName.startsWith('BLUEZ_OUTPUT.') &&
+                    ((aliasUpper && nodeDesc.includes(aliasUpper)) || nodeDesc.includes('BUDS')))
+                    fallbackId = String(obj.id);
+            }
+
+            return fallbackId;
+        } catch (_e) {
+            return null;
+        }
+    }
+
+    async _routeDefaultPipeWireSink(info) {
+        if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+            return;
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+            if (attempt > 0) {
+                const ok = await this._waitMs(750);
+                if (!ok || this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+                    return;
+            }
+
+            const stdout = await execCommunicateAsync(['pw-dump'], this._cancellable);
+            if (!stdout || this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+                return;
+
+            const sinkId = this._findPipeWireSinkId(stdout, info);
+            if (sinkId) {
+                await execCheckAsync(['wpctl', 'set-default', sinkId], this._cancellable);
+                return;
+            }
+        }
+    }
+
+    async _switchPipeWireProfile(info, mode) {
+        if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+            return;
+
         const macU = info.macUnderscore;
         if (!macU || macU === '00_00_00_00_00_00')
             return;
 
+        const stdout = await execCommunicateAsync(['pw-dump'], this._cancellable);
+        if (!stdout || this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
+            return;
+
         try {
-            const proc = Gio.Subprocess.new(
-                ['pw-dump'],
-                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE
-            );
-            proc.communicate_utf8_async(null, this._cancellable, (source, res) => {
-                try {
-                    const [ok, stdout] = source.communicate_utf8_finish(res);
-                    if (!ok || !stdout)
+            const data = JSON.parse(stdout);
+            const prefix = mode === 'a2dp' ? 'a2dp-sink' : 'headset-head-unit';
+            const upperMacU = macU.toUpperCase();
+            const upperMacColon = upperMacU.replace(/_/g, ':');
+
+            for (const obj of data) {
+                if (obj.type !== 'PipeWire:Interface:Device')
+                    continue;
+                const devName = String(obj.info?.props?.['device.name'] || '').toUpperCase();
+                const devAddr = String(obj.info?.props?.['api.bluez5.address'] || '').toUpperCase();
+                if (!devName.includes(upperMacU) && devAddr !== upperMacColon)
+                    continue;
+
+                const devId = String(obj.id);
+                const enumProfiles = obj.info?.params?.EnumProfile || [];
+                const candidates = enumProfiles.filter(
+                    p => String(p.name || '').startsWith(prefix) && p.available !== 'no'
+                );
+                const list = candidates.length > 0
+                    ? candidates
+                    : enumProfiles.filter(p => String(p.name || '').startsWith(prefix));
+                if (list.length > 0) {
+                    const chosen = list.find(c => c.name === prefix) || list[0];
+                    await execCheckAsync(
+                        ['wpctl', 'set-profile', devId, String(chosen.index)],
+                        this._cancellable
+                    );
+                    if (this._destroyed || !this._cancellable || this._cancellable.is_cancelled())
                         return;
-                    const data = JSON.parse(stdout);
-                    const prefix = mode === 'a2dp' ? 'a2dp-sink' : 'headset-head-unit';
-                    for (const obj of data) {
-                        if (obj.type !== 'PipeWire:Interface:Device')
-                            continue;
-                        const devName = String(obj.info?.props?.['device.name'] || '').toUpperCase();
-                        if (!devName.includes(macU.toUpperCase()))
-                            continue;
-                        const devId = String(obj.id);
-                        const enumProfiles = obj.info?.params?.EnumProfile || [];
-                        const candidates = enumProfiles.filter(
-                            p => String(p.name || '').startsWith(prefix) && p.available !== 'no'
-                        );
-                        const list = candidates.length > 0
-                            ? candidates
-                            : enumProfiles.filter(p => String(p.name || '').startsWith(prefix));
-                        if (list.length > 0) {
-                            const chosen = list.find(c => c.name === prefix) || list[0];
-                            const setProc = Gio.Subprocess.new(
-                                ['wpctl', 'set-profile', devId, String(chosen.index)],
-                                Gio.SubprocessFlags.NONE
-                            );
-                            setProc.wait_async(this._cancellable, null);
-                            break;
-                        }
-                    }
-                } catch (_e) {
+                    await this._routeDefaultPipeWireSink(info);
+                    break;
                 }
-            });
+            }
         } catch (_e) {
         }
     }
 
     destroy() {
-        this._cancellable.cancel();
+        this._destroyed = true;
+
+        if (this._pendingTimeouts) {
+            for (const id of this._pendingTimeouts)
+                GLib.Source.remove(id);
+            this._pendingTimeouts.clear();
+            this._pendingTimeouts = null;
+        }
+
+        this._cancellable?.cancel();
         this._cancellable = null;
 
-        this._httpSession.abort();
+        this._httpSession?.abort();
         this._httpSession = null;
 
         if (this._dbusSubId) {
@@ -476,11 +734,13 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
             this._dbusSubId = null;
         }
 
-        this._settings.disconnectObject(this);
+        this._toggle?.disconnectObject(this);
+        this._settings?.disconnectObject(this);
         this._settings = null;
 
         this.quickSettingsItems.forEach(item => item.destroy());
         this._toggle = null;
+        this._indicator = null;
         this._extension = null;
 
         super.destroy();

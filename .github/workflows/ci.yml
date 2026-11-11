@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Lint Shell Scripts, GSettings Schema & Extension Metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Ensure glib-compile-schemas is installed
+        run: |
+          if ! command -v glib-compile-schemas >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends libglib2.0-bin
+          fi
+
+      - name: Validate shell script syntax
+        run: bash -n install.sh uninstall.sh buds-switch buds-settings
+
+      - name: Validate GSettings XML schema strictly
+        run: glib-compile-schemas --strict --dry-run schemas/
+
+      - name: Validate metadata.json
+        run: |
+          python3 - <<'PYEOF'
+          import json
+          import pathlib
+
+          data = json.loads(pathlib.Path("metadata.json").read_text(encoding="utf-8"))
+          required = ("uuid", "name", "description", "shell-version", "version-name", "settings-schema")
+          missing = [key for key in required if not data.get(key)]
+          if missing:
+              raise SystemExit(f"Missing required metadata.json keys: {missing}")
+          if not isinstance(data["shell-version"], list) or not data["shell-version"]:
+              raise SystemExit("shell-version must be a non-empty list")
+          print("metadata.json OK:", data["uuid"], data["version-name"])
+          PYEOF
+
+      - name: Validate ES module syntax for GNOME Shell extension files
+        run: |
+          for js_file in extension.js budsQuickToggle.js prefs.js; do
+            node --check "$js_file"
+          done

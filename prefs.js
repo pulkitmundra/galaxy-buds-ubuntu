@@ -15,6 +15,9 @@ function cleanModelName(rawName) {
 }
 
 function scanPairedGalaxyBudsAsync(cancellable, callback) {
+    if (cancellable.is_cancelled())
+        return;
+
     Gio.DBus.system.call(
         'org.bluez',
         '/',
@@ -30,6 +33,8 @@ function scanPairedGalaxyBudsAsync(cancellable, callback) {
             const fallbackHeadsets = [];
             try {
                 const reply = conn.call_finish(res);
+                if (cancellable.is_cancelled())
+                    return;
                 const [objects] = reply.deep_unpack();
                 for (const [, ifaces] of Object.entries(objects)) {
                     const dev = ifaces['org.bluez.Device1'];
@@ -56,9 +61,11 @@ function scanPairedGalaxyBudsAsync(cancellable, callback) {
                         fallbackHeadsets.push(item);
                 }
             } catch (e) {
-                if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                if (cancellable.is_cancelled() || e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                     return;
             }
+            if (cancellable.is_cancelled())
+                return;
             callback(results.length > 0 ? results : fallbackHeadsets);
         }
     );
@@ -67,8 +74,13 @@ function scanPairedGalaxyBudsAsync(cancellable, callback) {
 export default class BudsQuickTogglePreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
+        window._settings = settings;
+
         const cancellable = new Gio.Cancellable();
-        window.connect('close-request', () => cancellable.cancel());
+        window.connect('close-request', () => {
+            cancellable.cancel();
+            return false;
+        });
 
         window.set_default_size(680, 580);
         window.set_search_enabled(false);
@@ -101,7 +113,11 @@ export default class BudsQuickTogglePreferences extends ExtensionPreferences {
             css_classes: ['suggested-action'],
         });
         detectBtn.connect('clicked', () => {
+            if (cancellable.is_cancelled())
+                return;
             scanPairedGalaxyBudsAsync(cancellable, paired => {
+                if (cancellable.is_cancelled())
+                    return;
                 if (paired.length > 0) {
                     const best = paired.find(d => d.connected) || paired[0];
                     settings.set_string('bud-mac', best.address);
