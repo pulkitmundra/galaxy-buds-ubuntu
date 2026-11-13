@@ -23,6 +23,7 @@ $ buds-settings
 <p align="center">
   <a href="https://github.com/pulkitmundra/galaxy-buds-ubuntu/stargazers"><img src="https://img.shields.io/github/stars/pulkitmundra/galaxy-buds-ubuntu?style=social" alt="GitHub Stars" /></a>&nbsp;
   <a href="https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/"><img src="https://img.shields.io/badge/GNOME_Extensions-v1.2.1_(Approved)-4A86CF?style=flat&logo=gnome&logoColor=white" alt="GNOME Extensions Store" /></a>&nbsp;
+  <a href="https://pulkit-mundra-portfolio.vercel.app/projects/galaxy-buds-ubuntu-switcher"><img src="https://img.shields.io/badge/Case_Study-Interactive_GNOME_Demo-10B981?style=flat&logo=vercel&logoColor=white" alt="Case Study and Interactive GNOME Demo" /></a>&nbsp;
   <a href="https://github.com/pulkitmundra/galaxy-buds-ubuntu/releases"><img src="https://img.shields.io/github/v/release/pulkitmundra/galaxy-buds-ubuntu?color=38bdf8&label=Release" alt="Latest Release" /></a>&nbsp;
   <a href="https://github.com/pulkitmundra"><img src="https://img.shields.io/badge/Author-%40pulkitmundra-181717?style=flat&logo=github" alt="Author" /></a>&nbsp;
   <a href="https://pulkit-mundra-portfolio.vercel.app"><img src="https://img.shields.io/badge/Portfolio-pulkit--mundra-2563EB?style=flat&logo=vercel" alt="Portfolio" /></a>&nbsp;
@@ -121,6 +122,8 @@ sequenceDiagram
     User->>Phone: HTTP GET MacroDroid Webhook (/buds)
     Phone->>Buds: Connect Bluetooth Audio Device (with 2s retry)
 ```
+
+> **Interactive GNOME Quick Settings Demo & Case Study:** Test the interactive Ubuntu <-> Android audio handoff & `A2DP`/`HFP` profile simulator in the [**Portfolio Case Study ->**](https://pulkit-mundra-portfolio.vercel.app/projects/galaxy-buds-ubuntu-switcher)
 
 ---
 
@@ -318,7 +321,7 @@ Once installed (from `extensions.gnome.org` or via `./install.sh`), the GNOME Qu
 <a id="author"></a>
 ## 👨🏻‍💻 Author, Support & Contact
 
-Built and maintained by **Pulkit Mundra** (Senior Software Developer - SDE-3). Issues, feature requests, and pull requests are welcome!
+Built and maintained by **Pulkit Mundra** ([Portfolio](https://pulkit-mundra-portfolio.vercel.app) · [Interactive Case Study](https://pulkit-mundra-portfolio.vercel.app/projects/galaxy-buds-ubuntu-switcher) · [Engineering Deep Dives](https://pulkit-mundra-portfolio.vercel.app/engineering)). Issues, feature requests, and pull requests are welcome!
 
 If this tool saved you from Bluetooth pairing headaches on Ubuntu, consider buying me a coffee or sponsoring the project:
 
@@ -328,6 +331,9 @@ If this tool saved you from Bluetooth pairing headaches on Ubuntu, consider buyi
   </a>
   <a href="https://github.com/sponsors/pulkitmundra">
     <img src="https://img.shields.io/badge/Sponsor_on_GitHub-EA4AAA?style=for-the-badge&logo=github-sponsors&logoColor=white" alt="Sponsor on GitHub" />
+  </a>
+  <a href="https://pulkit-mundra-portfolio.vercel.app/projects/galaxy-buds-ubuntu-switcher">
+    <img src="https://img.shields.io/badge/Case_Study-10B981?style=for-the-badge&logo=vercel&logoColor=white" alt="Case Study" />
   </a>
   <a href="https://pulkit-mundra-portfolio.vercel.app">
     <img src="https://img.shields.io/badge/Portfolio-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Portfolio" />
