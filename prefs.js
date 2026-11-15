@@ -5,8 +5,14 @@ import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
+const EGO_STORE_URL = 'https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/';
 const GITHUB_REPO_URL = 'https://github.com/pulkitmundra/galaxy-buds-ubuntu';
 const GITHUB_ISSUES_URL = 'https://github.com/pulkitmundra/galaxy-buds-ubuntu/issues';
+const PORTFOLIO_URL = 'https://pulkit-mundra-portfolio.vercel.app/projects/galaxy-buds-ubuntu-switcher';
+
+function unpackProp(props, key, fallback) {
+    return props[key] ? props[key].deep_unpack() : fallback;
+}
 
 function cleanModelName(rawName) {
     if (!rawName)
@@ -29,43 +35,45 @@ function scanPairedGalaxyBudsAsync(cancellable, callback) {
         2000,
         cancellable,
         (conn, res) => {
-            const results = [];
-            const fallbackHeadsets = [];
+            let reply;
             try {
-                const reply = conn.call_finish(res);
-                if (cancellable.is_cancelled())
-                    return;
-                const [objects] = reply.deep_unpack();
-                for (const [, ifaces] of Object.entries(objects)) {
-                    const dev = ifaces['org.bluez.Device1'];
-                    if (!dev)
-                        continue;
-
-                    const address = String(dev.Address?.deep_unpack() ?? '').toUpperCase();
-                    const name = String(dev.Name?.deep_unpack() ?? '');
-                    const alias = String(dev.Alias?.deep_unpack() ?? name);
-                    const paired = Boolean(dev.Paired?.deep_unpack() ?? false);
-                    const connected = Boolean(dev.Connected?.deep_unpack() ?? false);
-                    const icon = String(dev.Icon?.deep_unpack() ?? '');
-
-                    const item = {
-                        address,
-                        cleanName: cleanModelName(alias || name),
-                        paired,
-                        connected,
-                    };
-
-                    if (/buds/i.test(name) || /buds/i.test(alias))
-                        results.push(item);
-                    else if (paired && /audio|headset|headphones/i.test(icon))
-                        fallbackHeadsets.push(item);
-                }
-            } catch (e) {
-                if (cancellable.is_cancelled() || e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
-                    return;
+                reply = conn.call_finish(res);
+            } catch (_e) {
+                return;
             }
+
             if (cancellable.is_cancelled())
                 return;
+
+            const results = [];
+            const fallbackHeadsets = [];
+            const [objects] = reply.deep_unpack();
+
+            for (const [, ifaces] of Object.entries(objects)) {
+                const dev = ifaces['org.bluez.Device1'];
+                if (!dev)
+                    continue;
+
+                const address = String(unpackProp(dev, 'Address', '')).toUpperCase();
+                const name = String(unpackProp(dev, 'Name', ''));
+                const alias = String(unpackProp(dev, 'Alias', name));
+                const paired = Boolean(unpackProp(dev, 'Paired', false));
+                const connected = Boolean(unpackProp(dev, 'Connected', false));
+                const icon = String(unpackProp(dev, 'Icon', ''));
+
+                const item = {
+                    address,
+                    cleanName: cleanModelName(alias || name),
+                    paired,
+                    connected,
+                };
+
+                if (/buds/i.test(name) || /buds/i.test(alias))
+                    results.push(item);
+                else if (paired && /audio|headset|headphones/i.test(icon))
+                    fallbackHeadsets.push(item);
+            }
+
             callback(results.length > 0 ? results : fallbackHeadsets);
         }
     );
@@ -226,9 +234,9 @@ export default class BudsQuickTogglePreferences extends ExtensionPreferences {
 
         addLinkRow(
             'Official GNOME Extensions Store Page',
-            'https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/',
+            EGO_STORE_URL,
             'Open Store Page',
-            'https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/'
+            EGO_STORE_URL
         );
         addLinkRow(
             'GitHub Repository and Documentation',
@@ -241,6 +249,12 @@ export default class BudsQuickTogglePreferences extends ExtensionPreferences {
             GITHUB_ISSUES_URL,
             'Open Issues',
             GITHUB_ISSUES_URL
+        );
+        addLinkRow(
+            'Developer Portfolio and More Ubuntu Apps',
+            PORTFOLIO_URL,
+            'Open Portfolio',
+            PORTFOLIO_URL
         );
     }
 }

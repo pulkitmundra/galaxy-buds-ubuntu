@@ -22,7 +22,7 @@ $ buds-settings
 
 <p align="center">
   <a href="https://github.com/pulkitmundra/galaxy-buds-ubuntu/stargazers"><img src="https://img.shields.io/github/stars/pulkitmundra/galaxy-buds-ubuntu?style=social" alt="GitHub Stars" /></a>&nbsp;
-  <a href="https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/"><img src="https://img.shields.io/badge/GNOME_Extensions-v1.2.1_(Approved)-4A86CF?style=flat&logo=gnome&logoColor=white" alt="GNOME Extensions Store" /></a>&nbsp;
+  <a href="https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/"><img src="https://img.shields.io/badge/GNOME_Extensions-v1.2.2_(Approved)-4A86CF?style=flat&logo=gnome&logoColor=white" alt="GNOME Extensions Store" /></a>&nbsp;
   <a href="https://pulkit-mundra-portfolio.vercel.app/projects/galaxy-buds-ubuntu-switcher"><img src="https://img.shields.io/badge/Case_Study-Interactive_GNOME_Demo-10B981?style=flat&logo=vercel&logoColor=white" alt="Case Study and Interactive GNOME Demo" /></a>&nbsp;
   <a href="https://github.com/pulkitmundra/galaxy-buds-ubuntu/releases"><img src="https://img.shields.io/github/v/release/pulkitmundra/galaxy-buds-ubuntu?color=38bdf8&label=Release" alt="Latest Release" /></a>&nbsp;
   <a href="https://github.com/pulkitmundra"><img src="https://img.shields.io/badge/Author-%40pulkitmundra-181717?style=flat&logo=github" alt="Author" /></a>&nbsp;
@@ -39,6 +39,7 @@ $ buds-settings
   <a href="#quick-start">Quick Start</a> -
   <a href="#android-setup">Android Setup</a> -
   <a href="#cli-usage">CLI Usage</a> -
+  <a href="#more-projects">More Linux Apps</a> -
   <a href="#author">Author</a>
 </p>
 
@@ -53,7 +54,7 @@ Samsung Galaxy Buds only support *Samsung Seamless Switch* between Samsung OneUI
 2. **Dead Air on Disconnect**: Disconnecting the earbuds from Ubuntu leaves them idle instead of reconnecting them back to your Android phone.
 3. **Buried Audio Profile Switching**: Switching between High-Fidelity Stereo Music (`A2DP`) and Call + Microphone (`HFP/HSP`) normally requires digging through GNOME Sound Settings.
 
-| Behavior | Stock Ubuntu Bluetooth | `galaxy-buds-ubuntu` (v1.2.1) |
+| Behavior | Stock Ubuntu Bluetooth | `galaxy-buds-ubuntu` (v1.2.2) |
 | :--- | :---: | :---: |
 | **1-Click Install from GNOME Extensions Store** | `[ ]` N/A | `[x]` Official on [`extensions.gnome.org`](https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/) |
 | **Steal Audio from Android in 1 Click** | `[ ]` Often fails on LE Audio | `[x]` Connects `BR/EDR` UUIDs (`A2DP`, `AVRCP`, `HFP`) over D-Bus |
@@ -94,7 +95,7 @@ Click **"Settings & Android Setup Guide"** inside the GNOME Quick Settings dropd
    - **Android Auto-Reconnect Webhook (`MacroDroid`)**: Bind and save your `macrodroid-webhook` base URL directly in `GSettings` (and automatically sync to `~/.config/buds-switch.env` when launched via `buds-settings`).
 2. **Tab 2 - Android Setup & Project Links (`Android Setup`):**
    - Step-by-step interactive guide explaining how passive `BR/EDR` audio pull and MacroDroid webhook push work (`buds` trigger + 2-second retry action + Unrestricted battery setting).
-   - Quick-launch buttons for the **Official GNOME Extensions Store Page**, **GitHub Repository**, and **Issue Tracker**.
+   - Quick-launch buttons for the **Official GNOME Extensions Store Page**, **GitHub Repository**, **Issue Tracker**, and **Developer Portfolio**.
 
 ---
 
@@ -309,12 +310,13 @@ Once installed (from `extensions.gnome.org` or via `./install.sh`), the GNOME Qu
 ---
 
 <a id="more-projects"></a>
-## 🔗 More Linux & Ubuntu Desktop Apps by Pulkit Mundra
+## More Open-Source Linux Apps by Pulkit Mundra
 
 | Project | Description | Links |
 | :--- | :--- | :--- |
-| **[Crunchyroll Ubuntu Desktop](https://github.com/pulkitmundra/crunchyroll-ubuntu-desktop)** | Unofficial Linux Desktop & HTPC client for Crunchyroll with Widevine DRM, Custom Lists, Auto-Skip HUD, In-Player Quality Selector, Sleep Timer & Auto-PiP Mini-Player | [GitHub](https://github.com/pulkitmundra/crunchyroll-ubuntu-desktop) · [Snap Store](https://snapcraft.io/crunchyroll-ubuntu-desktop) |
-| **[NVR Command Center](https://github.com/pulkitmundra/nvr-command-center)** | Ultra-low-latency GPU RTSP IP Camera, CCTV, NVR/DVR/XVR & Cloud P2P Surveillance Viewer for Linux/Ubuntu in Native Rust (Dahua SmartPSS/DMSS, CP Plus KVMS/gCMOB, Hikvision iVMS-4200, Amcrest, ONVIF) | [GitHub](https://github.com/pulkitmundra/nvr-command-center) · [Snap Store](https://snapcraft.io/nvr-command-center) |
+| **[Crunchyroll Desktop for Linux](https://github.com/pulkitmundra/crunchyroll-ubuntu-desktop)** | Unofficial Linux Desktop & HTPC client for Crunchyroll with Widevine DRM, Custom Lists, Auto-Skip HUD, In-Player Quality Selector, Sleep Timer & Auto-PiP Mini-Player | [GitHub](https://github.com/pulkitmundra/crunchyroll-ubuntu-desktop) \| [Snap Store](https://snapcraft.io/crunchyroll-ubuntu-desktop) \| [Case Study](https://pulkit-mundra-portfolio.vercel.app/projects/crunchyroll-ubuntu-desktop) |
+| **[NVR Command Center](https://github.com/pulkitmundra/nvr-command-center)** | Ultra-low-latency GPU RTSP IP Camera, CCTV, NVR/DVR/XVR & Cloud P2P Surveillance Viewer for Linux/Ubuntu in Native Rust (Dahua SmartPSS/DMSS, CP Plus KVMS/gCMOB, Hikvision iVMS-4200, Amcrest, ONVIF) | [GitHub](https://github.com/pulkitmundra/nvr-command-center) \| [Snap Store](https://snapcraft.io/nvr-command-center) \| [Case Study](https://pulkit-mundra-portfolio.vercel.app/projects/nvr-command-center) |
+| **[Developer Portfolio & Engineering Blog](https://pulkit-mundra-portfolio.vercel.app)** | Interactive architecture case studies, GNOME/Ubuntu systems engineering deep dives, and open-source Linux desktop apps | [Portfolio & Blog](https://pulkit-mundra-portfolio.vercel.app) \| [Galaxy Buds Case Study](https://pulkit-mundra-portfolio.vercel.app/projects/galaxy-buds-ubuntu-switcher) |
 
 ---
 

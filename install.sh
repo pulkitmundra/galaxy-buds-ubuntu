@@ -70,7 +70,7 @@ get_current_gsetting() {
   printf '%s' "$raw"
 }
 
-echo "=== Samsung Galaxy Buds Ubuntu & Android Switcher Installer (v1.2.1) ==="
+echo "=== Samsung Galaxy Buds Ubuntu & Android Switcher Installer (v1.2.2) ==="
 
 # 1. Check .env and restrict permissions to owner only (0600)
 if [ ! -f "$REPO_DIR/.env" ]; then

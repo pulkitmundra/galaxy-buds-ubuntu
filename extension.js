@@ -7,7 +7,7 @@ export default class BudsQuickToggleExtension extends Extension {
     }
 
     disable() {
-        this._indicator?.destroy();
+        this._indicator.destroy();
         this._indicator = null;
     }
 }
