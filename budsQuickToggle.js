@@ -11,6 +11,33 @@ const A2DP_UUID = '0000110b-0000-1000-8000-00805f9b34fb';
 const AVRCP_UUID = '0000110e-0000-1000-8000-00805f9b34fb';
 const HFP_UUID = '0000111e-0000-1000-8000-00805f9b34fb';
 
+const LID_DISCONNECT_TIMEOUT_MS = 4500;
+const LID_POST_DISCONNECT_SETTLE_MS = 600;
+const LID_WEBHOOK_TIMEOUT_MS = 4000;
+const LID_FAILSAFE_RELEASE_MS = 10000;
+
+function closeFdSafely(fd) {
+    if (typeof fd !== 'number' || fd < 0)
+        return;
+
+    try {
+        GLib.close(fd);
+    } catch (_e) {
+    }
+}
+
+function createPowerSettings() {
+    const schemaSource = Gio.SettingsSchemaSource.get_default();
+    if (!schemaSource)
+        return null;
+
+    const schema = schemaSource.lookup('org.gnome.settings-daemon.plugins.power', true);
+    if (!schema || !schema.has_key('lid-close-suspend-with-external-monitor'))
+        return null;
+
+    return new Gio.Settings({settings_schema: schema});
+}
+
 function unpackProp(props, key, fallback) {
     return props[key] ? props[key].deep_unpack() : fallback;
 }
@@ -220,14 +247,24 @@ class BudsMenuToggle extends QuickSettings.QuickMenuToggle {
         this._hfpItem.connect('activate', () => onAction('profile-hfp'));
         this.menu.addMenuItem(this._hfpItem);
 
-        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this._settingsSeparator = new PopupMenu.PopupSeparatorMenuItem();
+        this.menu.addMenuItem(this._settingsSeparator);
 
         this._settingsItem = new PopupMenu.PopupMenuItem('Settings & Android Setup Guide');
         this._settingsItem.connect('activate', () => {
+            if (!Main.sessionMode.allowSettings)
+                return;
             Main.panel.statusArea.quickSettings.menu.close();
             onOpenPreferences();
         });
         this.menu.addMenuItem(this._settingsItem);
+        this.syncSessionMode();
+    }
+
+    syncSessionMode() {
+        const canOpenSettings = Boolean(Main.sessionMode.allowSettings);
+        this._settingsSeparator.visible = canOpenSettings;
+        this._settingsItem.visible = canOpenSettings;
     }
 
     updateDeviceLabels(fullTitle, pillTitle, subtitleText) {
@@ -249,9 +286,18 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
         this._pendingTimeouts = new Set();
         this._extension = extension;
         this._settings = extension.getSettings();
+        this._powerSettings = createPowerSettings();
         this._cancellable = new Gio.Cancellable();
         this._httpSession = new Soup.Session({timeout: 5});
         this._isBusy = false;
+
+        this._cachedDeviceInfo = null;
+        this._lidInhibitFd = -1;
+        this._lidInhibitPending = false;
+        this._wantLidInhibit = false;
+        this._lidIsClosed = false;
+        this._lidHandoffInFlight = false;
+        this._lidFailSafeTimerId = 0;
 
         const iconFile = Gio.File.new_for_path(`${extension.path}/earbuds-symbolic.svg`);
         this._gicon = new Gio.FileIcon({file: iconFile});
@@ -268,7 +314,15 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
         this.quickSettingsItems.push(this._toggle);
 
         this._toggle.connectObject('clicked', () => this._onToggleClicked(), this);
-        this._settings.connectObject('changed', () => this._refreshState(), this);
+        this._settings.connectObject('changed', () => {
+            this._updateLidInhibitorState();
+            this._refreshState();
+        }, this);
+
+        this._sessionModeSubId = Main.sessionMode.connect('updated', () => {
+            if (this._toggle)
+                this._toggle.syncSessionMode();
+        });
 
         Main.panel.statusArea.quickSettings.addExternalIndicator(this);
 
@@ -291,6 +345,67 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
             }
         );
 
+        this._loginPropSubId = Gio.DBus.system.signal_subscribe(
+            'org.freedesktop.login1',
+            'org.freedesktop.DBus.Properties',
+            'PropertiesChanged',
+            '/org/freedesktop/login1',
+            'org.freedesktop.login1.Manager',
+            Gio.DBusSignalFlags.NONE,
+            (_conn, _sender, _objectPath, _iface, _signalName, params) => {
+                if (cancellable.is_cancelled())
+                    return;
+                const [, changedProps] = params.deep_unpack();
+                if (changedProps && Object.prototype.hasOwnProperty.call(changedProps, 'LidClosed'))
+                    this._onLidStateChanged(Boolean(unpackProp(changedProps, 'LidClosed', false)));
+            }
+        );
+
+        this._upowerPropSubId = Gio.DBus.system.signal_subscribe(
+            'org.freedesktop.UPower',
+            'org.freedesktop.DBus.Properties',
+            'PropertiesChanged',
+            '/org/freedesktop/UPower',
+            'org.freedesktop.UPower',
+            Gio.DBusSignalFlags.NONE,
+            (_conn, _sender, _objectPath, _iface, _signalName, params) => {
+                if (cancellable.is_cancelled())
+                    return;
+                const [, changedProps] = params.deep_unpack();
+                if (changedProps && Object.prototype.hasOwnProperty.call(changedProps, 'LidIsClosed'))
+                    this._onLidStateChanged(Boolean(unpackProp(changedProps, 'LidIsClosed', false)));
+            }
+        );
+
+        this._sleepSubId = Gio.DBus.system.signal_subscribe(
+            'org.freedesktop.login1',
+            'org.freedesktop.login1.Manager',
+            'PrepareForSleep',
+            '/org/freedesktop/login1',
+            null,
+            Gio.DBusSignalFlags.NONE,
+            (_conn, _sender, _objectPath, _iface, _signalName, params) => {
+                if (cancellable.is_cancelled())
+                    return;
+                const [goingToSleep] = params.deep_unpack();
+                if (!goingToSleep) {
+                    if (this._httpSession)
+                        this._httpSession.abort();
+                    this._syncInitialLidState();
+                    this._refreshState();
+                } else if (
+                    !this._lidIsClosed &&
+                    !this._lidHandoffInFlight &&
+                    this._settings.get_boolean('lid-close-handoff') &&
+                    this._cachedDeviceInfo &&
+                    this._cachedDeviceInfo.connected
+                ) {
+                    this._disconnectBluezDevice(this._cachedDeviceInfo, 800);
+                }
+            }
+        );
+
+        this._syncInitialLidState();
         this._refreshState();
     }
 
@@ -417,6 +532,9 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
             if (cancellable.is_cancelled())
                 return;
 
+            this._cachedDeviceInfo = info;
+            this._updateLidInhibitorState();
+
             const {fullTitle, pillTitle} = formatModelTitles(info.alias);
 
             this._toggle.checked = info.connected;
@@ -428,6 +546,215 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
 
             this._toggle.updateDeviceLabels(fullTitle, pillTitle, subtitle);
         });
+    }
+
+    _syncInitialLidState() {
+        const cancellable = this._cancellable;
+        Gio.DBus.system.call(
+            'org.freedesktop.UPower',
+            '/org/freedesktop/UPower',
+            'org.freedesktop.DBus.Properties',
+            'Get',
+            new GLib.Variant('(ss)', ['org.freedesktop.UPower', 'LidIsClosed']),
+            new GLib.VariantType('(v)'),
+            Gio.DBusCallFlags.NONE,
+            2000,
+            cancellable,
+            (conn, res) => {
+                let reply;
+                try {
+                    reply = conn.call_finish(res);
+                } catch (_e) {
+                    return;
+                }
+
+                if (cancellable.is_cancelled() || this._lidHandoffInFlight)
+                    return;
+
+                const [innerVariant] = reply.deep_unpack();
+                this._lidIsClosed = Boolean(innerVariant.deep_unpack());
+                this._updateLidInhibitorState();
+            }
+        );
+    }
+
+    _isClamshellExternalMonitorMode() {
+        const monitors = Main.layoutManager.monitors;
+        if (!Array.isArray(monitors) || monitors.length <= 1)
+            return false;
+
+        if (!this._powerSettings)
+            return true;
+
+        return !this._powerSettings.get_boolean('lid-close-suspend-with-external-monitor');
+    }
+
+    _clearLidFailSafeTimer() {
+        const timerId = this._lidFailSafeTimerId;
+        if (timerId !== 0) {
+            this._lidFailSafeTimerId = 0;
+            if (this._pendingTimeouts && this._pendingTimeouts.delete(timerId))
+                GLib.Source.remove(timerId);
+        }
+    }
+
+    _releaseLidInhibitor() {
+        const fd = this._lidInhibitFd;
+        if (fd >= 0) {
+            this._lidInhibitFd = -1;
+            closeFdSafely(fd);
+        }
+    }
+
+    _updateLidInhibitorState() {
+        if (this._lidHandoffInFlight)
+            return;
+
+        const shouldHold =
+            this._settings.get_boolean('lid-close-handoff') &&
+            !this._lidIsClosed &&
+            Boolean(this._cachedDeviceInfo && this._cachedDeviceInfo.connected);
+
+        this._wantLidInhibit = shouldHold;
+
+        if (!shouldHold) {
+            this._releaseLidInhibitor();
+            return;
+        }
+
+        if (this._lidInhibitFd >= 0 || this._lidInhibitPending)
+            return;
+
+        this._lidInhibitPending = true;
+        const cancellable = this._cancellable;
+
+        Gio.DBus.system.call_with_unix_fd_list(
+            'org.freedesktop.login1',
+            '/org/freedesktop/login1',
+            'org.freedesktop.login1.Manager',
+            'Inhibit',
+            new GLib.Variant('(ssss)', [
+                'handle-lid-switch',
+                'Samsung Galaxy Buds Switcher',
+                'Handing off earbuds to Android before sleep',
+                'block',
+            ]),
+            new GLib.VariantType('(h)'),
+            Gio.DBusCallFlags.NONE,
+            2000,
+            null,
+            cancellable,
+            (conn, res) => {
+                let fdList;
+                try {
+                    [, fdList] = conn.call_with_unix_fd_list_finish(res);
+                } catch (_e) {
+                    if (!cancellable.is_cancelled())
+                        this._lidInhibitPending = false;
+                    return;
+                }
+
+                const fds = fdList ? fdList.steal_fds() : [];
+                const fd = fds.length > 0 ? fds[0] : -1;
+                const keepFd =
+                    !cancellable.is_cancelled() &&
+                    (this._wantLidInhibit || this._lidHandoffInFlight) &&
+                    this._lidInhibitFd < 0;
+
+                if (!keepFd) {
+                    closeFdSafely(fd);
+                    if (!cancellable.is_cancelled())
+                        this._lidInhibitPending = false;
+                    return;
+                }
+
+                this._lidInhibitPending = false;
+                this._lidInhibitFd = fd;
+            }
+        );
+    }
+
+    _onLidStateChanged(isClosed) {
+        if (this._lidIsClosed === isClosed)
+            return;
+
+        this._lidIsClosed = isClosed;
+
+        if (!isClosed) {
+            this._updateLidInhibitorState();
+            this._refreshState();
+            return;
+        }
+
+        this._wantLidInhibit = false;
+
+        const shouldHandoff =
+            this._settings.get_boolean('lid-close-handoff') &&
+            !this._isClamshellExternalMonitorMode() &&
+            Boolean(this._cachedDeviceInfo && this._cachedDeviceInfo.connected);
+
+        if (!shouldHandoff) {
+            this._releaseLidInhibitor();
+            return;
+        }
+
+        this._handleLidClosed();
+    }
+
+    async _handleLidClosed() {
+        if (this._lidHandoffInFlight)
+            return;
+
+        const cancellable = this._cancellable;
+        const info = this._cachedDeviceInfo;
+        if (!info || !cancellable || cancellable.is_cancelled()) {
+            this._releaseLidInhibitor();
+            return;
+        }
+
+        this._lidHandoffInFlight = true;
+        this._clearLidFailSafeTimer();
+
+        const pendingTimeouts = this._pendingTimeouts;
+        const failSafeId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, LID_FAILSAFE_RELEASE_MS, () => {
+            pendingTimeouts.delete(failSafeId);
+            if (this._lidFailSafeTimerId === failSafeId)
+                this._lidFailSafeTimerId = 0;
+            this._lidHandoffInFlight = false;
+            this._releaseLidInhibitor();
+            return GLib.SOURCE_REMOVE;
+        });
+        this._lidFailSafeTimerId = failSafeId;
+        pendingTimeouts.add(failSafeId);
+
+        try {
+            await this._disconnectBluezDevice(info, LID_DISCONNECT_TIMEOUT_MS);
+            if (cancellable.is_cancelled())
+                return;
+
+            if (this._lidIsClosed && !this._isClamshellExternalMonitorMode()) {
+                const settled = await this._waitMs(LID_POST_DISCONNECT_SETTLE_MS);
+                if (settled && !cancellable.is_cancelled() &&
+                    this._lidIsClosed && !this._isClamshellExternalMonitorMode()) {
+                    const ok = await this._sendWebhookWithRetry(
+                        LID_WEBHOOK_TIMEOUT_MS,
+                        () => !this._lidIsClosed || this._isClamshellExternalMonitorMode()
+                    );
+                    if (!ok && !cancellable.is_cancelled() && this._lidIsClosed)
+                        console.warn('[GalaxyBuds] Lid handoff webhook did not succeed before timeout');
+                }
+            }
+        } finally {
+            if (this._cancellable === cancellable && !cancellable.is_cancelled()) {
+                this._clearLidFailSafeTimer();
+                this._lidHandoffInFlight = false;
+                if (this._lidIsClosed)
+                    this._releaseLidInhibitor();
+                else
+                    this._updateLidInhibitorState();
+                this._refreshState();
+            }
+        }
     }
 
     _onToggleClicked() {
@@ -550,8 +877,35 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
         await this._routeDefaultPipeWireSink(info);
     }
 
-    async _disconnectBuds(info) {
+    async _isBluezConnected(objectPath, timeoutMs = 1000) {
         const cancellable = this._cancellable;
+        if (!objectPath || !cancellable || cancellable.is_cancelled())
+            return false;
+
+        try {
+            const reply = await dbusCallAsync(
+                Gio.DBus.system,
+                'org.bluez',
+                objectPath,
+                'org.freedesktop.DBus.Properties',
+                'Get',
+                new GLib.Variant('(ss)', ['org.bluez.Device1', 'Connected']),
+                cancellable,
+                timeoutMs
+            );
+            const [innerVariant] = reply.deep_unpack();
+            return Boolean(innerVariant.deep_unpack());
+        } catch (_e) {
+            return false;
+        }
+    }
+
+    async _disconnectBluezDevice(info, timeoutMs) {
+        const cancellable = this._cancellable;
+        if (!info || !cancellable || cancellable.is_cancelled())
+            return false;
+
+        const deadlineUs = GLib.get_monotonic_time() + timeoutMs * 1000;
 
         try {
             await dbusCallAsync(
@@ -562,33 +916,133 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
                 'Disconnect',
                 null,
                 cancellable,
-                4000
+                timeoutMs
             );
         } catch (_e) {
             if (cancellable.is_cancelled())
-                return;
+                return false;
         }
 
-        if (cancellable.is_cancelled())
-            return;
+        while (!cancellable.is_cancelled()) {
+            const remainingMs = Math.floor((deadlineUs - GLib.get_monotonic_time()) / 1000);
+            if (remainingMs <= 0)
+                break;
+
+            const stillConnected = await this._isBluezConnected(
+                info.objectPath,
+                Math.min(1000, Math.max(200, remainingMs))
+            );
+            if (!stillConnected)
+                return true;
+
+            const ok = await this._waitMs(Math.min(200, remainingMs));
+            if (!ok)
+                return false;
+        }
+
+        return false;
+    }
+
+    _sendWebhookWithTimeout(timeoutMs) {
+        const parentCancellable = this._cancellable;
+        if (!parentCancellable || parentCancellable.is_cancelled() || !this._httpSession)
+            return Promise.resolve(false);
 
         const webhookUrl = this._getWebhookBase();
-        if (webhookUrl) {
-            const msg = Soup.Message.new('GET', webhookUrl);
-            if (msg) {
-                this._httpSession.send_and_read_async(
-                    msg,
-                    GLib.PRIORITY_DEFAULT,
-                    cancellable,
-                    (session, res) => {
-                        try {
-                            session.send_and_read_finish(res);
-                        } catch (_e) {
-                        }
+        if (!webhookUrl)
+            return Promise.resolve(false);
+
+        const msg = Soup.Message.new('GET', webhookUrl);
+        if (!msg)
+            return Promise.resolve(false);
+
+        if (typeof msg.set_force_http1 === 'function')
+            msg.set_force_http1(true);
+
+        const pendingTimeouts = this._pendingTimeouts;
+        const reqCancellable = new Gio.Cancellable();
+        const parentCancelId = parentCancellable.connect(() => reqCancellable.cancel());
+
+        return new Promise(resolve => {
+            let timerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, timeoutMs, () => {
+                pendingTimeouts.delete(timerId);
+                timerId = 0;
+                reqCancellable.cancel();
+                return GLib.SOURCE_REMOVE;
+            });
+            pendingTimeouts.add(timerId);
+
+            this._httpSession.send_and_read_async(
+                msg,
+                GLib.PRIORITY_DEFAULT,
+                reqCancellable,
+                (session, res) => {
+                    if (timerId !== 0) {
+                        if (pendingTimeouts.delete(timerId))
+                            GLib.Source.remove(timerId);
+                        timerId = 0;
                     }
-                );
-            }
+                    if (parentCancelId && !parentCancellable.is_cancelled())
+                        parentCancellable.disconnect(parentCancelId);
+
+                    let ok = false;
+                    try {
+                        session.send_and_read_finish(res);
+                        const status = msg.get_status();
+                        ok = status >= 200 && status < 400;
+                    } catch (_e) {
+                        ok = false;
+                    }
+                    resolve(ok);
+                }
+            );
+        });
+    }
+
+    async _sendWebhookWithRetry(timeoutMs, shouldAbort = null) {
+        const parentCancellable = this._cancellable;
+        if (!parentCancellable || parentCancellable.is_cancelled())
+            return false;
+
+        const firstOk = await this._sendWebhookWithTimeout(timeoutMs);
+        if (firstOk)
+            return true;
+
+        if (parentCancellable.is_cancelled() || (shouldAbort && shouldAbort()))
+            return false;
+
+        const waited = await this._waitMs(300);
+        if (!waited || parentCancellable.is_cancelled() || (shouldAbort && shouldAbort()))
+            return false;
+
+        return this._sendWebhookWithTimeout(Math.min(3000, timeoutMs));
+    }
+
+    async _triggerPostDisconnectWebhook() {
+        const cancellable = this._cancellable;
+        if (!cancellable || cancellable.is_cancelled())
+            return;
+
+        const settled = await this._waitMs(LID_POST_DISCONNECT_SETTLE_MS);
+        if (!settled || cancellable.is_cancelled())
+            return;
+
+        await this._sendWebhookWithRetry(5000);
+    }
+
+    async _disconnectBuds(info) {
+        const cancellable = this._cancellable;
+
+        if (!this._lidHandoffInFlight) {
+            this._wantLidInhibit = false;
+            this._releaseLidInhibitor();
         }
+
+        await this._disconnectBluezDevice(info, 4500);
+        if (!cancellable || cancellable.is_cancelled())
+            return;
+
+        this._triggerPostDisconnectWebhook().catch(() => {});
     }
 
     _findPipeWireSinkId(stdout, info) {
@@ -718,6 +1172,12 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
     }
 
     destroy() {
+        this._wantLidInhibit = false;
+        this._lidHandoffInFlight = false;
+        this._lidInhibitPending = false;
+        this._lidFailSafeTimerId = 0;
+        this._releaseLidInhibitor();
+
         for (const id of this._pendingTimeouts)
             GLib.Source.remove(id);
         this._pendingTimeouts.clear();
@@ -734,6 +1194,26 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
             this._dbusSubId = null;
         }
 
+        if (this._loginPropSubId) {
+            Gio.DBus.system.signal_unsubscribe(this._loginPropSubId);
+            this._loginPropSubId = null;
+        }
+
+        if (this._upowerPropSubId) {
+            Gio.DBus.system.signal_unsubscribe(this._upowerPropSubId);
+            this._upowerPropSubId = null;
+        }
+
+        if (this._sleepSubId) {
+            Gio.DBus.system.signal_unsubscribe(this._sleepSubId);
+            this._sleepSubId = null;
+        }
+
+        if (this._sessionModeSubId) {
+            Main.sessionMode.disconnect(this._sessionModeSubId);
+            this._sessionModeSubId = 0;
+        }
+
         this._toggle.disconnectObject(this);
         this._settings.disconnectObject(this);
 
@@ -741,6 +1221,8 @@ class BudsIndicator extends QuickSettings.SystemIndicator {
         this._toggle = null;
         this._indicator = null;
         this._gicon = null;
+        this._powerSettings = null;
+        this._cachedDeviceInfo = null;
         this._settings = null;
         this._extension = null;
 

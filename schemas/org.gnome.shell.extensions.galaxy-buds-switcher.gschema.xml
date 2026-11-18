@@ -11,5 +11,10 @@
       <summary>MacroDroid Webhook Base URL</summary>
       <description>Optional MacroDroid webhook base URL triggered when disconnecting from Ubuntu to reconnect on Android.</description>
     </key>
+    <key name="lid-close-handoff" type="b">
+      <default>true</default>
+      <summary>Auto-Switch to Android on Laptop Lid Close</summary>
+      <description>When enabled and Galaxy Buds are connected to Ubuntu, closing the laptop lid disconnects Bluetooth and triggers the MacroDroid webhook before Wi-Fi sleeps, then immediately releases the lid lock for normal system suspend.</description>
+    </key>
   </schema>
 </schemalist>

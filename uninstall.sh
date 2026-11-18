@@ -52,6 +52,16 @@ if [ -L "$HOME/.config/buds-switch.env" ]; then
 fi
 
 # 4. Remove local extension symlinks (leaving EGO-managed regular files untouched unless --purge)
+LEGACY_EXT_DIR="$HOME/.local/share/gnome-shell/extensions/buds-quick-toggle@local"
+if [ -L "$LEGACY_EXT_DIR" ]; then
+  rm -f "$LEGACY_EXT_DIR"
+elif [ -d "$LEGACY_EXT_DIR" ]; then
+  rm -f "$LEGACY_EXT_DIR/metadata.json" "$LEGACY_EXT_DIR/extension.js" "$LEGACY_EXT_DIR/budsQuickToggle.js" \
+    "$LEGACY_EXT_DIR/prefs.js" "$LEGACY_EXT_DIR/budsSettingsWindow.js" "$LEGACY_EXT_DIR/earbuds-symbolic.svg" \
+    "$LEGACY_EXT_DIR/schemas"
+  rmdir "$LEGACY_EXT_DIR" 2>/dev/null || true
+fi
+
 if [ -L "$EXT_DIR" ]; then
   gnome-extensions disable "$EXT_UUID" 2>/dev/null || true
   rm -f "$EXT_DIR"
@@ -88,6 +98,7 @@ if [ "$PURGE" = true ]; then
   if command -v gsettings >/dev/null 2>&1 && [ -d "$REPO_DIR/schemas" ]; then
     GSETTINGS_SCHEMA_DIR="$REPO_DIR/schemas" gsettings reset org.gnome.shell.extensions.galaxy-buds-switcher bud-mac 2>/dev/null || true
     GSETTINGS_SCHEMA_DIR="$REPO_DIR/schemas" gsettings reset org.gnome.shell.extensions.galaxy-buds-switcher macrodroid-webhook 2>/dev/null || true
+    GSETTINGS_SCHEMA_DIR="$REPO_DIR/schemas" gsettings reset org.gnome.shell.extensions.galaxy-buds-switcher lid-close-handoff 2>/dev/null || true
   fi
   if command -v dconf >/dev/null 2>&1; then
     dconf reset -f /org/gnome/shell/extensions/galaxy-buds-switcher/ 2>/dev/null || true

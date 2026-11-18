@@ -54,7 +54,7 @@ Samsung Galaxy Buds only support *Samsung Seamless Switch* between Samsung OneUI
 2. **Dead Air on Disconnect**: Disconnecting the earbuds from Ubuntu leaves them idle instead of reconnecting them back to your Android phone.
 3. **Buried Audio Profile Switching**: Switching between High-Fidelity Stereo Music (`A2DP`) and Call + Microphone (`HFP/HSP`) normally requires digging through GNOME Sound Settings.
 
-| Behavior | Stock Ubuntu Bluetooth | `galaxy-buds-ubuntu` (v1.2.2) |
+| Behavior | Stock Ubuntu Bluetooth | `galaxy-buds-ubuntu` (v1.3.0) |
 | :--- | :---: | :---: |
 | **1-Click Install from GNOME Extensions Store** | `[ ]` N/A | `[x]` Official on [`extensions.gnome.org`](https://extensions.gnome.org/extension/11611/samsung-galaxy-buds-quick-settings-switcher/) |
 | **Steal Audio from Android in 1 Click** | `[ ]` Often fails on LE Audio | `[x]` Connects `BR/EDR` UUIDs (`A2DP`, `AVRCP`, `HFP`) over D-Bus |
@@ -63,6 +63,7 @@ Samsung Galaxy Buds only support *Samsung Seamless Switch* between Samsung OneUI
 | **1-Click Music (`A2DP`) vs Call (`HFP`) Toggle** | `[ ]` Buried in Sound Settings | `[x]` Built into Quick Settings menu + `buds-switch profile [a2dp\|hfp]` |
 | **Auto-Set PipeWire Default Output Sink** | `[ ]` Manual switch needed | `[x]` Automatically routes via `wpctl` |
 | **Push Audio Back to Android on Disconnect** | `[ ]` Leaves earbuds idle | `[x]` Triggers MacroDroid webhook for instant phone reconnect |
+| **Auto-Switch to Android on Laptop Lid Close** | `[ ]` Wi-Fi drops before handoff | `[x]` Pre-sleep `handle-lid-switch` intercept disconnects & fires webhook before Wi-Fi sleeps, then suspends seamlessly |
 | **Native GTK4 Settings & Setup Guide GUI** | `[ ]` Manual config files | `[x]` Libadwaita Preferences (`buds-settings`) with 1-click BlueZ scan |
 
 ---
@@ -93,6 +94,7 @@ Click **"Settings & Android Setup Guide"** inside the GNOME Quick Settings dropd
 1. **Tab 1 - Configuration (`Configuration`):**
    - **Auto-Detect Paired Earbuds (`Scan BlueZ`)**: 1-click asynchronous scan of BlueZ (`org.bluez.Device1`) that automatically detects any paired Samsung Galaxy Buds model and saves its MAC address to `GSettings` (`bud-mac`). You can also leave MAC blank for automatic runtime discovery.
    - **Android Auto-Reconnect Webhook (`MacroDroid`)**: Bind and save your `macrodroid-webhook` base URL directly in `GSettings` (and automatically sync to `~/.config/buds-switch.env` when launched via `buds-settings`).
+   - **Auto-Switch to Android on Laptop Lid Close (`lid-close-handoff`)**: Toggle automatic pre-sleep handoff when closing your laptop lid (armed only while Buds are connected to Ubuntu, skipped automatically in external-monitor clamshell mode, with a hard fail-safe ceiling so laptop suspend is never blocked).
 2. **Tab 2 - Android Setup & Project Links (`Android Setup`):**
    - Step-by-step interactive guide explaining how passive `BR/EDR` audio pull and MacroDroid webhook push work (`buds` trigger + 2-second retry action + Unrestricted battery setting).
    - Quick-launch buttons for the **Official GNOME Extensions Store Page**, **GitHub Repository**, **Issue Tracker**, and **Developer Portfolio**.

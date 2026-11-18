@@ -2,6 +2,21 @@
 
 All notable changes to **Samsung Galaxy Buds - Ubuntu & Android Seamless Switcher** are documented in this file.
 
+## [v1.3.0] - 2026-11-18
+
+### Added
+- **Seamless Laptop Lid-Close Auto-Handoff to Android (`budsQuickToggle.js`, `metadata.json`, `prefs.js`, `schemas/`):**
+  - Added dynamic `handle-lid-switch` pre-sleep interception via `org.freedesktop.login1.Manager.Inhibit` (`Gio.UnixFDList` + `GLib.close`), armed strictly while Galaxy Buds are actively connected to Ubuntu and `lid-close-handoff` is enabled (`0` inhibitors held whenever Buds are disconnected).
+  - On laptop lid close (`org.freedesktop.login1` `LidClosed` & `org.freedesktop.UPower` `LidIsClosed`), runs a deterministic sequential handoff **before** `NetworkManager` tears down Wi-Fi: disconnects BlueZ and polls `org.bluez.Device1.Connected` until confirmed `false`, waits a `600 ms` Bluetooth radio settle window, fires an `HTTP/1.1` MacroDroid webhook with automatic transient-error retry, and immediately closes the inhibitor FD so `systemd-logind` executes native system suspend cleanly.
+  - Added `"session-modes": ["user", "unlock-dialog"]` in `metadata.json` so lid-close handoff stays active even after GNOME's 5-minute idle screen lock, while automatically hiding `Settings & Android Setup Guide` whenever `Main.sessionMode.allowSettings` is `false`.
+  - Automatically aborts the Android webhook if the lid is reopened mid-disconnect, purges stale `Soup.Session` keep-alive sockets after system wake (`PrepareForSleep(false)`), skips handoff when docked to an external monitor in clamshell mode (`Main.layoutManager.monitors.length > 1` with `lid-close-suspend-with-external-monitor = false`), and enforces a hard `10.0 s` fail-safe timer so offline Wi-Fi can never block laptop sleep.
+  - Added **Auto-Switch to Android on Laptop Lid Close** `Adw.SwitchRow` in GTK4 / Libadwaita Preferences (`prefs.js`).
+
+## [v1.2.2] - 2026-11-15
+
+### Changed
+- **Strict GNOME Extensions Review Best-Practices Cleanup (`extension.js`, `budsQuickToggle.js`, `prefs.js`):** Removed `_destroyed` flags in favor of pure `Gio.Cancellable` lifecycle control, narrowed `try-catch` blocks strictly to throwing GI/JSON calls, removed unnecessary optional chaining, and migrated GObject classes from `_init()` to ES6 `constructor()`.
+
 ## [v1.2.1] - 2026-11-11
 
 ### Fixed

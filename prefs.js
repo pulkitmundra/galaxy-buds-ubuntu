@@ -146,7 +146,7 @@ export default class BudsQuickTogglePreferences extends ExtensionPreferences {
 
         const webhookGroup = new Adw.PreferencesGroup({
             title: 'Android Auto-Reconnect Webhook (MacroDroid)',
-            description: 'Optional webhook triggered on Ubuntu disconnect so your Android phone reclaims the earbuds.',
+            description: 'Optional webhook triggered on Ubuntu disconnect or lid close so your Android phone reclaims the earbuds.',
         });
         configPage.add(webhookGroup);
 
@@ -155,6 +155,15 @@ export default class BudsQuickTogglePreferences extends ExtensionPreferences {
         });
         settings.bind('macrodroid-webhook', webhookRow, 'text', Gio.SettingsBindFlags.DEFAULT);
         webhookGroup.add(webhookRow);
+
+        const lidHandoffRow = new Adw.SwitchRow({
+            title: 'Auto-Switch to Android on Laptop Lid Close',
+            subtitle:
+                'Disconnects Buds and fires the MacroDroid webhook before Wi-Fi sleeps, ' +
+                'then releases immediately for seamless laptop suspend (skipped in external-monitor clamshell mode).',
+        });
+        settings.bind('lid-close-handoff', lidHandoffRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+        webhookGroup.add(lidHandoffRow);
 
         const guidePage = new Adw.PreferencesPage({
             title: 'Android Setup',

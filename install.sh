@@ -70,7 +70,7 @@ get_current_gsetting() {
   printf '%s' "$raw"
 }
 
-echo "=== Samsung Galaxy Buds Ubuntu & Android Switcher Installer (v1.2.2) ==="
+echo "=== Samsung Galaxy Buds Ubuntu & Android Switcher Installer (v1.3.0) ==="
 
 # 1. Check .env and restrict permissions to owner only (0600)
 if [ ! -f "$REPO_DIR/.env" ]; then
@@ -129,7 +129,17 @@ fi
 USER_HOME="$HOME" DESKTOP_SRC="$REPO_DIR/galaxybudsclient.desktop" DESKTOP_DST="$HOME/.local/share/applications/galaxybudsclient.desktop" \
   python3 -c 'import os, pathlib; pathlib.Path(os.environ["DESKTOP_DST"]).write_text(pathlib.Path(os.environ["DESKTOP_SRC"]).read_text(encoding="utf-8").replace("__HOME__", os.environ["USER_HOME"]), encoding="utf-8")'
 
-# 7. Install standalone GNOME Shell extension
+# 7. Install standalone GNOME Shell extension (and remove legacy prototype dir if present)
+LEGACY_EXT_DIR="$HOME/.local/share/gnome-shell/extensions/buds-quick-toggle@local"
+if [ -L "$LEGACY_EXT_DIR" ]; then
+  rm -f "$LEGACY_EXT_DIR"
+elif [ -d "$LEGACY_EXT_DIR" ]; then
+  rm -f "$LEGACY_EXT_DIR/metadata.json" "$LEGACY_EXT_DIR/extension.js" "$LEGACY_EXT_DIR/budsQuickToggle.js" \
+    "$LEGACY_EXT_DIR/prefs.js" "$LEGACY_EXT_DIR/budsSettingsWindow.js" "$LEGACY_EXT_DIR/earbuds-symbolic.svg" \
+    "$LEGACY_EXT_DIR/schemas"
+  rmdir "$LEGACY_EXT_DIR" 2>/dev/null || true
+fi
+
 EXT_UUID="galaxy-buds-switcher@pulkitmundra.github.io"
 EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$EXT_UUID"
 mkdir -p "$EXT_DIR"
